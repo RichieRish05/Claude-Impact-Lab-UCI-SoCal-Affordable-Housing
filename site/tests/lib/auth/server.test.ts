@@ -38,7 +38,7 @@ describe("lib/auth/server", () => {
     vi.stubEnv("NEON_AUTH_BASE_URL", BASE_URL);
     vi.stubEnv("NEON_AUTH_COOKIE_SECRET", "too-short");
     await expect(import("@/lib/auth/server")).rejects.toThrow(
-      "at least 32 characters",
+      "NEON_AUTH_COOKIE_SECRET must be at least 32 characters",
     );
   });
 });

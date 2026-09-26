@@ -6,9 +6,14 @@ function requireEnv(name: string): string {
   return value;
 }
 
+const secret = requireEnv("NEON_AUTH_COOKIE_SECRET");
+if (secret.length < 32) {
+  throw new Error("NEON_AUTH_COOKIE_SECRET must be at least 32 characters");
+}
+
 // The only server-side import of the Neon Auth SDK. Everything else reads the
 // session through lib/auth/session.ts.
 export const auth = createNeonAuth({
   baseUrl: requireEnv("NEON_AUTH_BASE_URL"),
-  cookies: { secret: requireEnv("NEON_AUTH_COOKIE_SECRET") },
+  cookies: { secret },
 });
