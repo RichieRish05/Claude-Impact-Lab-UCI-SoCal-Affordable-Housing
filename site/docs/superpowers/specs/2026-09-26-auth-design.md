@@ -90,7 +90,7 @@ An SDK outage therefore fails closed and looks like being logged out. The log li
 | `tests/lib/auth/session.test.ts` | `@/lib/auth/server` | A valid session maps to exactly `{ id, email, name }` (extra SDK fields dropped); `data: null` → `null`; `error` set → `null` and logged; `getSession` throws → `null` and logged |
 | `tests/lib/auth/guards.test.ts` | `@/lib/auth/session`, `next/navigation` | `requireUser` returns the user, or throws `UnauthorizedError` when `null`; `requirePageUser` returns the user, or calls `redirect("/auth/sign-in")` when `null` |
 | `tests/app/api/me/route.test.ts` | `@/lib/auth/session` | `null` → 401 `{ error: "Unauthorized" }`; a user → 200 `{ id, email }` and nothing else |
-| `tests/proxy.test.ts` | `@/lib/auth/server` | Uses `unstable_doesProxyMatch` from `next/experimental/testing/server`. Matches `/dashboard` and `/dashboard/settings`. Doesn't match `/`, `/auth/sign-in`, `/auth/sign-up`, `/api/auth/get-session`, `/api/inngest`, `/api/me` or `/_next/static/chunk.js`. |
+| `tests/proxy.test.ts` | `@/lib/auth/server` | Uses `unstable_doesMiddlewareMatch` from `next/experimental/testing/server` (the installed Next 16.3.6 exports this name; the docs say `unstable_doesProxyMatch`, which does not exist). Matches `/dashboard` and `/dashboard/settings`. Doesn't match `/`, `/auth/sign-in`, `/auth/sign-up`, `/api/auth/get-session`, `/api/inngest`, `/api/me` or `/_next/static/chunk.js`. |
 
 **Not automated (trusted to Neon):** password checks, the Google OAuth exchange, cookie issuance, and how `auth.middleware` behaves once it runs.
 
