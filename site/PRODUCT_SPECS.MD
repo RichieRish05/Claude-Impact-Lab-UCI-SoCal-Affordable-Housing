@@ -30,6 +30,7 @@ Context document for AI-assisted development. Treat everything here as the sourc
 | Frontend / app | Next.js | Hosting **OPEN** (Vercel vs AWS via SST) |
 | Orchestration | Inngest | Functions live inside the Next.js app |
 | Database | Neon Postgres via Prisma | Pooled connection for app, direct for migrations |
+| Auth | Neon Auth | Enabled per branch via `neon.ts` (`auth: true`); user tables live in the same Neon database |
 | Object storage | AWS S3 | Private bucket, presigned URLs only |
 | Delivery | AWS CloudFront | Origin access control (OAC) |
 | Heavy compute | Modal | `transcribe` (GPU), `render` (CPU, the cut), `export` (CPU, caption burn-in) |
@@ -44,6 +45,7 @@ Context document for AI-assisted development. Treat everything here as the sourc
   - `step.fetch()` for external HTTP calls (offloaded to Inngest's servers so Next.js is not billed while waiting).
   - `step.waitForEvent()` to pause until a Modal job reports completion. **Every wait has a timeout.**
 - **Neon** — Video records, status, transcripts, edit decision lists, caption settings, user settings.
+- **Neon Auth** — User sign-up / sign-in and sessions. Every `userId` in §4 is the Neon Auth user id. Pages and API routes (presigned URLs, upload confirm, export requests) require a signed-in user and only ever act on that user's own videos and exports. Config: `NEON_AUTH_BASE_URL`, `NEON_AUTH_JWKS_URL` (pulled into `.env.local` by `neon link` / `neon deploy`).
 - **S3** — Original uploads, extracted audio, caption files, final renders. Private; all access via presigned URLs.
 - **CloudFront** — Serves finished videos and caption files; bucket stays private via OAC.
 - **Modal** — Three functions, each exposed as a web endpoint that spawns a background job and returns immediately. Jobs report completion by sending events to Inngest's event API.
@@ -168,6 +170,7 @@ Prisma notes: use Neon's **pooled** connection string for the app runtime and th
 
 ## 6. Security
 
+- **Authentication via Neon Auth.** Every page and API route except sign-in requires a session. Authorization is ownership: a user can only read, upload, or export against rows whose `userId` matches their session. Presigned URLs are issued only after that check.
 - Presigned URLs for **all** S3 access. Modal never holds AWS credentials.
 - Modal endpoints require a **shared secret** so outsiders cannot submit jobs.
 - Modal uses an **Inngest event key** to send completion events.
@@ -212,7 +215,7 @@ Prisma notes: use Neon's **pooled** connection string for the app runtime and th
 | Decision | Options | Considerations |
 |---|---|---|
 | Next.js hosting | Vercel vs AWS via SST | Vercel: simpler, polished previews, OIDC to AWS. SST/AWS: one account, resource linking, audio extraction next to S3. |
-| Neon branch ownership | Vercel's Neon integration vs SST creating a branch per stage | Pick one; do not mix. |
+| Neon branch ownership | Vercel's Neon integration vs SST creating a branch per stage | Pick one; do not mix. Current state: project `raspy-rice-16858150` has `production` (default) and `dev`; local `site/` is linked to `dev` via the Neon CLI. Neon Auth must be enabled on every branch the app runs against. |
 | Render location | Modal CPU vs AWS Fargate | Modal: one worker platform, simpler. Fargate: no egress fee, video never leaves AWS. |
 | Transcription model | Which Whisper variant | Must keep fillers. Word timings come from the forced-alignment pass regardless of variant, so the choice is about transcript accuracy and GPU cost. Spike data point: `medium.en` was about 3× slower than `small.en` on CPU with no timing benefit once aligned. |
 | Pause tightening default | 0.4 s vs 0.5 s vs off | 0.4 s produced a natural-feeling edit on the spike clip. Setting is per user and per video. |
