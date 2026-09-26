@@ -15,10 +15,18 @@ Package manager is **pnpm** (`packageManager: pnpm@10.10.0`). Run these from `si
 - `pnpm dev`: dev server on :3000. This also rewrites `AGENTS.md` (see that file).
 - `pnpm build` / `pnpm start`
 - `pnpm lint`: ESLint 9 flat config (`eslint-config-next` core-web-vitals + typescript)
-
-No test runner is configured yet.
+- `pnpm test`: Vitest unit tests (`tests/**/*.test.ts`, mirrors source paths)
+- `pnpm test:watch`: Vitest in watch mode
 
 Path alias: `@/*` maps to `site/*`.
+
+## Auth
+
+Neon Auth (email+password, Google). Server-side checks always go through `lib/auth/guards.ts`, never `auth.getSession()` directly:
+- API routes and server actions: `requireUser()` inside `try`, `assertOwner(user, row)` for owned resources, `toErrorResponse(e)` in `catch` (401/404 JSON). `app/api/me/route.ts` is the reference.
+- Pages: `requirePageUser()` (redirects to `/auth/sign-in`).
+- `proxy.ts` is only an optimistic redirect for `/dashboard`; never rely on it for security, and keep `/api/*` out of its matcher.
+- Tests mock `@/lib/auth/session` (`getCurrentUser`), not the SDK.
 
 ## Product architecture (from PRODUCT_SPECS.MD)
 
