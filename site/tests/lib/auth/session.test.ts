@@ -12,6 +12,7 @@ vi.mock("@/lib/auth/server", () => ({
   auth: { getSession: vi.fn() },
 }));
 
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/server";
 import { getCurrentUser } from "@/lib/auth/session";
 
@@ -86,5 +87,11 @@ describe("getCurrentUser", () => {
     getSession.mockRejectedValue(new Error("network"));
     expect(await getCurrentUser()).toBeNull();
     expect(consoleError).toHaveBeenCalledOnce();
+  });
+
+  it("rethrows Next.js control-flow errors instead of treating them as signed out", async () => {
+    getSession.mockImplementation(() => redirect("/elsewhere"));
+    await expect(getCurrentUser()).rejects.toThrow("NEXT_REDIRECT");
+    expect(consoleError).not.toHaveBeenCalled();
   });
 });

@@ -23,9 +23,10 @@ Path alias: `@/*` maps to `site/*`.
 ## Auth
 
 Neon Auth (email+password, Google). Server-side checks always go through `lib/auth/guards.ts`, never `auth.getSession()` directly:
-- API routes and server actions: `requireUser()` inside `try`, `assertOwner(user, row)` for owned resources, `toErrorResponse(e)` in `catch` (401/404 JSON). `app/api/me/route.ts` is the reference.
-- Pages: `requirePageUser()` (redirects to `/auth/sign-in`).
-- `proxy.ts` is only an optimistic redirect for `/dashboard`; never rely on it for security, and keep `/api/*` out of its matcher.
+- Route handlers: `requireUser()` inside `try`, `assertOwner(user, row)` for owned resources, `toErrorResponse(e)` in `catch` (401/404 JSON). `app/api/me/route.ts` is the reference.
+- Server actions: `requireUser()` and `assertOwner()` too, but never return `toErrorResponse` (a `Response` can't be returned from an action); let the error propagate or return `{ error }`.
+- Pages: `requirePageUser()` (redirects to `/auth/sign-in`). Every such page must also be under the `proxy.ts` matcher: the proxy refreshes the session cookie, which a Server Component can't write.
+- `proxy.ts` is otherwise only an optimistic redirect; never rely on it for security, and keep `/api/*` out of its matcher.
 - Tests mock `@/lib/auth/session` (`getCurrentUser`), not the SDK.
 
 ## Product architecture (from PRODUCT_SPECS.MD)
