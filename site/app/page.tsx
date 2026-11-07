@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 
 const trustPoints = [
   "Eligibility decided by code, not AI guesses",
-  "Every rule links to its source",
-  "Never asks for your SSN or bank details",
+  "Every result cites its code section",
+  "A screening tool, not legal advice",
 ];
 
 export default function Home() {
@@ -27,25 +27,25 @@ export default function Home() {
         />
         <div className="relative z-10 max-w-3xl">
           <p className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-            Down payment assistance
+            Starter-home land search
             <span className="rounded bg-accent px-1.5 py-1 font-mono text-foreground">
-              California
+              Huntington Beach
             </span>
           </p>
           <h1 className="mt-5 text-5xl leading-none font-normal tracking-tighter sm:text-7xl">
-            Every program.
+            Every buildable lot.
             <br />
-            One plan home.
+            One search.
           </h1>
           <p className="mt-4 max-w-xl text-lg leading-snug text-muted-foreground sm:text-xl">
-            Answer a few questions and see the assistance you qualify for, how
-            it stacks, and what to apply for first.
+            Ask in plain English where new homes can go, see the lots that
+            qualify on a map, and track each one from found to funded.
           </p>
           <Link
             href="/auth/sign-up"
             className="mt-7 inline-flex h-13 items-center rounded-lg bg-brand px-6 font-medium text-brand-foreground"
           >
-            Check what you qualify for
+            Find buildable lots
           </Link>
         </div>
       </main>

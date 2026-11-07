@@ -1,0 +1,12 @@
+[project]
+name = "pipeline"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "anthropic>=2.6.0",
+    "geoalchemy2>=0.21.0",
+    "geopandas>=1.2.0",
+    "psycopg[binary]>=3.3.8",
+    "python-dotenv>=1.2.4",
+    "sqlalchemy>=2.1.8",
+]

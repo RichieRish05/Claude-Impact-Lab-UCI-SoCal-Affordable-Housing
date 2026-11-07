@@ -5,23 +5,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 @AGENTS.md
 @PRODUCT_SPECS.MD
 
-The imported `PRODUCT_SPECS.MD` is the source of truth for what gets built: StackUp, its data contracts, and its rules for agents. The rest of this file covers what the spec can't tell you: how the repo differs from the spec today, and how to work in the existing code.
+The imported `PRODUCT_SPECS.MD` is the source of truth for what gets built: Groundwork, its data, eligibility rules, and LLM tools. The rest of this file covers what the spec can't tell you: how the repo differs from the spec today, and how to work in the existing code.
+
 ## Spec vs. current code
 
-The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code is a Next.js scaffold with working Neon Auth, carried over from an earlier project. None of the StackUp product exists yet: no `lib/match.ts`, `lib/plan.ts`, `inngest/`, seeded program rules, or profile API.
+The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code is a Next.js scaffold with working Neon Auth, a landing page, and a placeholder `/dashboard`. None of the Groundwork product exists yet: no parcel data, PostGIS, search, LLM tools, or projects.
 
-Required dependencies are also missing: tRPC, TanStack React Query, the Anthropic SDK, and the Inngest SDK aren't installed. Check the current Inngest docs before building the pipeline; the spec's design wasn't validated against them.
+PostGIS isn't enabled on Neon yet. Prisma has no geometry type, so geometry columns need `Unsupported("geometry(...)")` and spatial queries go through `db.$queryRaw`. The spec's offline data jobs live in `../pipeline/`, a separate Python project that only writes rows into tables this schema defines.
 
-Intake requires login, so new pages such as onboarding need `requirePageUser()` and an entry in the `proxy.ts` matcher, which currently covers only `/dashboard`. Signed-in users without a profile may use only onboarding, on both pages and APIs. Programs, Tracker, and Checklist also stay locked until the profile is complete, and the matcher must never run on an incomplete one. These gates are still to build: `lib/auth/guards.ts` checks only for a session, and `providers.tsx` sends every sign-in to `/dashboard`. Enforce it in the guards, because `proxy.ts` is only an optimistic redirect. `assertOwner` expects `userId`, while the `UserProfile` contract uses `user_id`, so map the field when calling it.
+Required dependencies are also missing: tRPC, TanStack React Query, the Anthropic SDK, and a map library (MapLibre GL or Mapbox GL) aren't installed.
 
-`docs/superpowers/` and the `/dashboard` page date from the earlier project. Their auth design is still accurate, but they contain no StackUp requirements.
+New pages that need a signed-in user need `requirePageUser()` and an entry in the `proxy.ts` matcher, which currently covers only `/dashboard`. Use `assertOwner` for owned rows such as projects; it expects a `userId` field, so map it from a snake_case column.
+
+`docs/superpowers/` dates from an earlier project. Its auth design is still accurate, but it contains no Groundwork requirements.
 
 ## Project structure
 
-- **`lib/`:** shared, reusable, pure utility functions, plus constants, enums, and thin wrappers such as `lib/db.ts`. `lib/match.ts`, `lib/plan.ts`, and `lib/types.ts` belong here.
+- **`lib/`:** shared, reusable, pure utility functions, plus constants, enums, and thin wrappers such as `lib/db.ts`. Shared types belong here. Eligibility rules don't: `../pipeline/` computes and stores them, and the app only reads the stored columns.
 - **`app/`:** pages and API routes.
 - **`components/`:** shared React components. `components/ui/` holds shadcn-registry components such as Magic UI's `dither-field.tsx`; add them with `pnpm dlx shadcn@latest add @magicui/<name>` rather than hand-writing them. Colors live as CSS variables in `app/globals.css`, and the app is light-only.
-- **`inngest/`:** the Inngest client, functions, ingest step logic, and `sources.json`.
+- **`inngest/`:** the Inngest client, functions, and step logic, if background jobs are added.
 - **`docs/`:** feature plans.
 
 ### API routes
@@ -32,7 +35,7 @@ Keep a plain route handler only when the caller dictates its own HTTP contract:
 
 - `app/api/auth/[...path]`: Neon Auth's catch-all handler.
 - `app/api/inngest`: Inngest's `serve()` handler, which uses `GET`, `POST`, and `PUT` on a single endpoint.
-- `app/api/voice-webhook`: Vapi requires `{ "results": [{ "toolCallId", "result" | "error" }] }` and ignores any status other than 200, which tRPC's `{ "result": { "data" } }` envelope and error statuses don't satisfy. Keep this route a thin adapter: put the logic in a tRPC procedure, call it with a server-side caller, and translate the outcome to Vapi's format. That procedure must check `VAPI_WEBHOOK_SECRET` itself, because it's also reachable at `/api/trpc`.
+- Webhooks from third parties with a fixed request and response format that tRPC's `{ "result": { "data" } }` envelope and error statuses don't satisfy. Keep these routes thin adapters: put the logic in a tRPC procedure, call it with a server-side caller, and translate the outcome. A procedure that checks a webhook secret must check it itself, because it's also reachable at `/api/trpc`.
 
 `app/api/me` is a scaffold REST route. Replace it with a procedure once tRPC is set up.
 
@@ -46,7 +49,7 @@ Keep comments minimal. Add one only when the code can't show why it does somethi
 
 ### Keeping docs current
 
-Keep the project context in the md files fresh. When a change makes `CLAUDE.md`, `PRODUCT_SPECS.MD`, or a plan in `docs/` inaccurate, update the file in the same change, including removing gaps from "Spec vs. current code" as they're built. Don't edit `AGENTS.md`, because `next dev` rewrites it.
+Keep the project context in the md files fresh. When a change makes `CLAUDE.md`, `PRODUCT_SPECS.MD`, `../pipeline/CLAUDE.md`, the root `CLAUDE.md`, or a plan in `docs/` inaccurate, update the file in the same change, including removing gaps from "Spec vs. current code" as they're built. Don't edit `AGENTS.md`, because `next dev` rewrites it.
 
 ## Commands
 
@@ -73,8 +76,6 @@ The `@/*` import alias maps to this directory.
 Prisma is the ORM, and all database queries must go through it. Import `db` from `lib/db.ts`, and never query with `pg` or another client directly. `lib/db.ts` exports the only client, which connects over node-postgres using the pooled `DATABASE_URL`. The Prisma CLI uses Neon's direct host instead, because schema changes can fail through PgBouncer: `prisma.config.ts` derives it by removing `-pooler` from `DATABASE_URL`.
 
 The Neon project is `UGCEditor` (`raspy-rice-16858150`), and local development uses its `dev` branch. `.neon` only sets the Neon CLI's target, while `DATABASE_URL` decides what the app and Prisma connect to. Run `neon link --project-id raspy-rice-16858150 --branch dev --no-env-pull` once per checkout.
-
-- **Profiles:** onboarding answers are nullable in `profiles`, so a dropped call keeps its partial answers. These rows are `ProfileDraft` in `lib/types.ts`. Only a profile with every answer filled in and `credit_band` not `"unknown"` counts as a complete `UserProfile`.
 
 - **Generated client:** it lives in `lib/generated/prisma`, is gitignored, and is rebuilt by `postinstall`. Run `pnpm exec prisma generate` after editing `prisma/schema.prisma`.
 - **Schema changes:** Prisma manages only the `public` schema; `neon_auth` belongs to Neon Auth. Edit `prisma/schema.prisma`, check which database `DATABASE_URL` points at, then pick the command by whether the change affects existing data:

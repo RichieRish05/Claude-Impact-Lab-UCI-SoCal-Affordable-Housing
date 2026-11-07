@@ -29,7 +29,7 @@ export default async function DashboardPage() {
           className="mt-6 flex min-h-64 grow items-center justify-center rounded-xl border border-border bg-muted"
         >
           <span className="rounded bg-accent px-2.5 py-1.5 font-mono text-xs">
-            Your programs will appear here
+            Your projects will appear here
           </span>
         </DitherField>
       </main>
