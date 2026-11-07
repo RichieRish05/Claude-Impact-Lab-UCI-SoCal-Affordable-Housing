@@ -9,7 +9,7 @@ The imported `PRODUCT_SPECS.MD` is the source of truth for what gets built: Stac
 
 ## Spec vs. current code
 
-The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code is a Next.js scaffold with working Neon Auth, carried over from an earlier project. None of the StackUp product exists yet: no `lib/match.ts`, `lib/plan.ts`, `lib/types.ts`, `data/rules/`, `scripts/`, or `/api/profile`, and `app/page.tsx` is still the `create-next-app` starter.
+The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code is a Next.js scaffold with working Neon Auth, carried over from an earlier project. None of the StackUp product exists yet: no `lib/match.ts`, `lib/plan.ts`, `lib/types.ts`, `program_rules` table, `scripts/`, or `/api/profile`, and `app/page.tsx` is still the `create-next-app` starter.
 
 Dependencies the spec calls for are also missing: no Postgres client or Anthropic SDK is installed, and `pnpm ingest` doesn't exist yet.
 

@@ -15,13 +15,14 @@ Down payment assistance stacking matcher. One-day hackathon build (UCI Impact La
 ```
 BUILD TIME (run once, Sat morning)
   program sites & PDFs → scripts/ingest.ts (Claude API, structured output)
-                       → data/rules/*.json (human-reviewed, committed to repo)
+                       → Neon `program_rules` table (human_reviewed = false)
+                       → person checks each row against source_url, sets human_reviewed = true
 
 RUNTIME
   sign in → onboarding form ─┐
   dashboard profile tab ─────┤ (/api/profile)
   voice call + code ─────────┘ (/api/voice-webhook)
-     ↓ save profile
+     ↓ save profile, load reviewed rules from Neon
   lib/match.ts (deterministic)
      → lib/plan.ts (topo sort)
      → Claude: plain-language explain
@@ -37,9 +38,9 @@ No message queue, no background workers. ~15 programs, not 15,000. The only asyn
 ## Stack
 
 - **Next.js (App Router) + TypeScript** on Vercel — frontend and API routes in one deploy
-- **Neon Postgres** — profiles + tracker state only; queried from server code only, never from the client
+- **Neon Postgres** — program rules, profiles, and tracker state; queried from server code only, never from the client
 - **Neon Auth** — email/password and Google, required for intake; server-side checks go through `lib/auth/guards.ts`
-- **Program rules** — JSON files in `data/rules/`, no database
+- **Program rules** — one row per program in `program_rules`: `id`, `human_reviewed`, and a `rule` JSONB column holding the `ProgramRule`. The `id` and `human_reviewed` columns are authoritative: the rule loader overwrites those fields in the object with the column values
 - **Claude API** — `scripts/ingest.ts` extraction + runtime explanation endpoint
 - **Vapi (or Retell)** — hosted voice agent; its tool-call POSTs the finished profile and link code to `/api/voice-webhook`
 
@@ -51,7 +52,6 @@ lib/match.ts         eligibility engine — pure functions over ProgramRule[]
 lib/plan.ts          dependency resolution — topological sort over prerequisites/requires
 lib/types.ts         the two contracts below; import from here only
 lib/auth/            Neon Auth setup, session, and guards (already built)
-data/rules/*.json    one file per program
 scripts/ingest.ts    Claude extraction pipeline (run manually, never at runtime)
 ```
 
@@ -60,7 +60,7 @@ scripts/ingest.ts    Claude extraction pipeline (run manually, never at runtime)
 Everything meets at these. Change them only by team agreement.
 
 ```ts
-// ProgramRule — data/rules/*.json
+// ProgramRule — `rule` column of the Neon `program_rules` table
 interface ProgramRule {
   id: string;                      // "calhfa-myhome"
   name: string;
@@ -119,7 +119,7 @@ Plan output: ordered steps from topo-sorting the union of `prerequisites` + `sta
 
 ## Rules for agents working in this repo
 
-1. **Never put an LLM call inside `lib/match.ts` or `lib/plan.ts`.** Deterministic only — this is the anti-hallucination story for judges.
+1. **Never put an LLM call inside `lib/match.ts` or `lib/plan.ts`.** Deterministic only — this is the anti-hallucination story for judges. They also never query the database: API routes load the rules and pass them in as `ProgramRule[]`.
 2. Rules with `human_reviewed: false` are invisible to the matcher. The demo answer to "what about hallucination?" is this flag plus `source_url`.
 3. **Never collect or store SSN, DOB, or bank/account numbers** — web form or voice. Income band, household size, city is all we need.
 4. All user-facing strings, including voice intake, are English only for now. No i18n framework.
