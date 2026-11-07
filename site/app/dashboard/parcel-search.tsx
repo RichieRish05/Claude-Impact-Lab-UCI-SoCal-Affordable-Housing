@@ -11,6 +11,7 @@ import {
 } from "@/lib/parcel-filters";
 import { useParcelFilters } from "@/lib/hooks/use-parcel-filters";
 import { useTRPC } from "@/lib/trpc/client";
+import { FilterChips } from "./filter-chips";
 import { FilterPanel } from "./filter-panel";
 import { ParcelMap, resultsKey } from "./parcel-map";
 import { ResultsList } from "./results-list";
@@ -62,6 +63,9 @@ export function ParcelSearch() {
           selectedApn={selectedApn}
           onSelect={setSelectedApn}
         />
+        <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-col gap-2 [&>*]:pointer-events-auto">
+          <FilterChips filters={filters} onChange={setFilters} />
+        </div>
       </section>
 
       <section

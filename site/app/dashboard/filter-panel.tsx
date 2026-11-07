@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import {
   countActiveFilters,
   DEFAULT_FILTERS,
+  NEAR_DEFAULT_MI,
   ZONE_GROUPS,
   type ParcelFilters,
 } from "@/lib/parcel-filters";
@@ -16,6 +17,8 @@ type Props = {
   zones: string[];
   neighborhoods: string[];
 };
+
+const RADIUS_OPTIONS = [0.25, 0.5, 1, 2];
 
 const CONFIDENCE_OPTIONS = [
   { label: "Any confidence", value: undefined },
@@ -168,6 +171,31 @@ export function FilterPanel({ filters, onChange, onReset, zones, neighborhoods }
         />
       </Section>
 
+      <Section label="Near a street">
+        <StreetField
+          value={filters.nearStreet}
+          onChange={(nearStreet) =>
+            onChange(nearStreet ? { nearStreet } : { nearStreet: undefined, nearMi: undefined })
+          }
+        />
+        <select
+          aria-label="Distance from the street"
+          className={inputClass}
+          disabled={!filters.nearStreet}
+          value={filters.nearMi ?? NEAR_DEFAULT_MI}
+          onChange={(e) => {
+            const mi = Number(e.target.value);
+            onChange({ nearMi: mi === NEAR_DEFAULT_MI ? undefined : mi });
+          }}
+        >
+          {RADIUS_OPTIONS.map((mi) => (
+            <option key={mi} value={mi}>
+              Within {mi} mi
+            </option>
+          ))}
+        </select>
+      </Section>
+
       <Section label="Neighborhood">
         <MultiSelect
           options={neighborhoods}
@@ -291,6 +319,40 @@ function MultiSelect({
         </Chip>
       ))}
     </div>
+  );
+}
+
+// Commits on blur or Enter, because every change runs a search.
+function StreetField({
+  value,
+  onChange,
+}: {
+  value: string | undefined;
+  onChange: (value: string | undefined) => void;
+}) {
+  const [text, setText] = useState(value ?? "");
+  const [shown, setShown] = useState(value);
+  if (value !== shown) {
+    setShown(value);
+    setText(value ?? "");
+  }
+  const commit = () => {
+    const next = text.trim() || undefined;
+    if (next !== value) onChange(next);
+  };
+
+  return (
+    <input
+      aria-label="Street name"
+      placeholder="e.g. Beach Blvd"
+      className={inputClass}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+      }}
+    />
   );
 }
 
