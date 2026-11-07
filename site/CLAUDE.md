@@ -39,7 +39,7 @@ The `@/*` import alias maps to this directory.
 
 ## Database
 
-Prisma is the ORM. `lib/db.ts` exports the only client (`db`), which connects over node-postgres using the pooled `DATABASE_URL`. The Prisma CLI uses Neon's direct host instead, because migrations can fail through PgBouncer: `prisma.config.ts` derives it by removing `-pooler` from `DATABASE_URL`. The schema has no models yet.
+Prisma is the ORM, and all database queries must go through it. Import `db` from `lib/db.ts`, and never query with `pg` or another client directly. `lib/db.ts` exports the only client, which connects over node-postgres using the pooled `DATABASE_URL`. The Prisma CLI uses Neon's direct host instead, because migrations can fail through PgBouncer: `prisma.config.ts` derives it by removing `-pooler` from `DATABASE_URL`. The schema has no models yet.
 
 - **Generated client:** it lives in `lib/generated/prisma`, is gitignored, and is rebuilt by `postinstall`. Run `pnpm exec prisma generate` after editing `prisma/schema.prisma`.
 - **Migrations:** `pnpm exec prisma migrate dev --name <name>`. Prisma manages only the `public` schema; `neon_auth` belongs to Neon Auth.
