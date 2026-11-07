@@ -1,11 +1,11 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { formatCount } from "@/lib/format";
 import {
   PARCEL_SORTS,
-  SEARCH_RESULT_LIMIT,
+  SEARCH_PAGE_SIZE,
   SORT_LABELS,
   type ParcelSort,
 } from "@/lib/parcel-filters";
@@ -22,14 +22,20 @@ export function ParcelSearch() {
     null,
   );
 
-  const search = useQuery({
-    ...trpc.parcels.search.queryOptions(filters),
+  const search = useInfiniteQuery({
+    ...trpc.parcels.search.infiniteQueryOptions(filters, {
+      initialCursor: 0,
+      getNextPageParam: (page) => page.nextCursor,
+    }),
     placeholderData: keepPreviousData,
   });
   const options = useQuery(trpc.parcels.filterOptions.queryOptions());
 
-  const parcels = search.data?.parcels ?? [];
-  const currentKey = resultsKey(parcels);
+  const pages = search.data?.pages ?? [];
+  const firstPage = pages[0];
+  const parcels = pages.flatMap((page) => page.parcels);
+  // Keyed on the first page so loading more keeps the map's view and selection.
+  const currentKey = resultsKey(firstPage?.parcels ?? []);
 
   // A lot picked from stale results is dropped when new results arrive, so the
   // map's fit to the new results isn't fighting a zoom to the old selection.
@@ -50,7 +56,12 @@ export function ParcelSearch() {
       </aside>
 
       <section className="relative min-h-0 bg-muted" aria-label="Map">
-        <ParcelMap parcels={parcels} selectedApn={selectedApn} onSelect={setSelectedApn} />
+        <ParcelMap
+          parcels={parcels}
+          fitKey={currentKey}
+          selectedApn={selectedApn}
+          onSelect={setSelectedApn}
+        />
       </section>
 
       <section
@@ -59,12 +70,12 @@ export function ParcelSearch() {
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
           <p className="text-sm" aria-live="polite">
-            {search.data ? (
+            {firstPage ? (
               <>
-                <span className="font-medium">{formatCount(search.data.total, "lot")}</span>
+                <span className="font-medium">{formatCount(firstPage.total, "lot")}</span>
                 <span className="text-muted-foreground">
                   {" · "}
-                  {formatCount(search.data.totalHomes, "possible home")}
+                  {formatCount(firstPage.totalHomes, "possible home")}
                 </span>
               </>
             ) : (
@@ -84,11 +95,6 @@ export function ParcelSearch() {
             ))}
           </select>
         </div>
-        {search.data && search.data.total > SEARCH_RESULT_LIMIT && (
-          <p className="border-b border-border px-5 py-2 text-xs text-muted-foreground">
-            Showing the top {SEARCH_RESULT_LIMIT}. Narrow the filters to see the rest.
-          </p>
-        )}
         <div
           className={`min-h-0 grow overflow-y-auto transition-opacity ${search.isPlaceholderData ? "opacity-60" : ""}`}
         >
@@ -96,8 +102,27 @@ export function ParcelSearch() {
             <p className="p-5 text-sm text-red-700">
               Search failed: {search.error.message}
             </p>
-          ) : search.data ? (
-            <ResultsList parcels={parcels} selectedApn={selectedApn} onSelect={setSelectedApn} />
+          ) : firstPage ? (
+            <>
+              <ResultsList parcels={parcels} selectedApn={selectedApn} onSelect={setSelectedApn} />
+              {search.hasNextPage && (
+                <div className="border-t border-border p-4 text-center">
+                  <button
+                    type="button"
+                    onClick={() => search.fetchNextPage()}
+                    disabled={search.isFetchingNextPage}
+                    className="cursor-pointer rounded-md border border-border bg-background px-3 py-1.5 text-xs hover:bg-accent disabled:cursor-default disabled:opacity-60"
+                  >
+                    {search.isFetchingNextPage
+                      ? "Loading…"
+                      : `Show ${Math.min(SEARCH_PAGE_SIZE, firstPage.total - parcels.length)} more`}
+                  </button>
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Showing {formatCount(parcels.length, "lot")} of {firstPage.total.toLocaleString()}
+                  </p>
+                </div>
+              )}
+            </>
           ) : null}
         </div>
       </section>

@@ -21,6 +21,8 @@ export function resultsKey(parcels: ParcelResult[]): string {
 
 type Props = {
   parcels: ParcelResult[];
+  // The map refits to the lots only when this changes.
+  fitKey: string;
   selectedApn: string | null;
   onSelect: (apn: string) => void;
 };
@@ -32,7 +34,7 @@ const fillColor = [
   NOT_ELIGIBLE,
 ] as maplibregl.ExpressionSpecification;
 
-export function ParcelMap({ parcels, selectedApn, onSelect }: Props) {
+export function ParcelMap({ parcels, fitKey, selectedApn, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [ready, setReady] = useState(false);
@@ -146,15 +148,18 @@ export function ParcelMap({ parcels, selectedApn, onSelect }: Props) {
         properties: properties(p),
       })),
     });
-
-    if (parcels.length > 0) {
-      const bounds = new maplibregl.LngLatBounds();
-      for (const p of parcels) bounds.extend([p.lng, p.lat]);
-      map.fitBounds(bounds, { padding: 60, maxZoom: 16, duration: 600 });
-    }
-    // Refit only when the set of lots changes, not on every refetch.
+    // Redraw only when the set of lots changes, not on every refetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, apnKey]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map || parcels.length === 0) return;
+    const bounds = new maplibregl.LngLatBounds();
+    for (const p of parcels) bounds.extend([p.lng, p.lat]);
+    map.fitBounds(bounds, { padding: 60, maxZoom: 16, duration: 600 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, fitKey]);
 
   useEffect(() => {
     const map = mapRef.current;
