@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 The imported `PRODUCT_SPECS.MD` is the source of truth for what gets built: StackUp, its data contracts, and its rules for agents. The rest of this file covers what the spec can't tell you: how the repo differs from the spec today, and how to work in the existing code.
 ## Spec vs. current code
 
-The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code is a Next.js scaffold with working Neon Auth, carried over from an earlier project. None of the StackUp product exists yet: no `lib/match.ts`, `lib/plan.ts`, `lib/types.ts`, `inngest/`, `program_rules` table, or profile API, and `app/page.tsx` is still the `create-next-app` starter.
+The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code is a Next.js scaffold with working Neon Auth, carried over from an earlier project. None of the StackUp product exists yet: no `lib/match.ts`, `lib/plan.ts`, `lib/types.ts`, `inngest/`, `program_rules` table, or profile API.
 
 Required dependencies are also missing: tRPC, TanStack React Query, the Anthropic SDK, and the Inngest SDK aren't installed. Check the current Inngest docs before building the pipeline; the spec's design wasn't validated against them.
 
@@ -20,6 +20,7 @@ Intake requires login, so new pages such as onboarding need `requirePageUser()` 
 
 - **`lib/`:** shared, reusable, pure utility functions, plus constants, enums, and thin wrappers such as `lib/db.ts`. `lib/match.ts`, `lib/plan.ts`, and `lib/types.ts` belong here.
 - **`app/`:** pages and API routes.
+- **`components/`:** shared React components. `components/ui/` holds shadcn-registry components such as Magic UI's `dither-field.tsx`; add them with `pnpm dlx shadcn@latest add @magicui/<name>` rather than hand-writing them. Colors live as CSS variables in `app/globals.css`, and the app is light-only.
 - **`inngest/`:** the Inngest client, functions, ingest step logic, and `sources.json`.
 - **`docs/`:** feature plans.
 
@@ -85,6 +86,8 @@ Neon Auth (email/password and Google). `lib/auth/server.ts` is the only server-s
 - **Plain route handlers (the exceptions above):** where a route needs a user session, call `requireUser()` inside `try`, `assertOwner(user, row)` for owned resources, and `toErrorResponse(e)` in `catch` (401/404 JSON). `app/api/me/route.ts` shows this pattern until it's replaced.
 - **Server actions:** use `requireUser()` and `assertOwner()`, but never return `toErrorResponse`, because an action can't return a `Response`. Let the error propagate or return `{ error }`.
 - **Pages:** call `requirePageUser()`, which redirects to `/auth/sign-in`. These pages must also be under the `proxy.ts` matcher, because the proxy refreshes the session cookie and a Server Component can't write it.
+
+- **Public pages that only vary their UI by session:** call `getCurrentUser()` from `lib/auth/session.ts`, as `components/site-header.tsx` does. Keep these pages out of the `proxy.ts` matcher, because it redirects signed-out visitors. Reading the session makes the page render per request.
 
 `proxy.ts` (Next 16's name for middleware) is only an optimistic redirect, so never rely on it for security. Keep `/api/*`, `/auth/*`, and static assets out of its matcher.
 

@@ -11,6 +11,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <NeonAuthUIProvider
       authClient={authClient}
+      defaultTheme="light"
+      className="flex grow flex-col"
       navigate={router.push}
       replace={router.replace}
       onSessionChange={() => router.refresh()}
