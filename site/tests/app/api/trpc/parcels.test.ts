@@ -10,6 +10,7 @@ import { appRouter } from "@/app/api/trpc/router";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
+import { SEARCH_PAGE_SIZE } from "@/lib/parcel-filters";
 
 const caller = createCallerFactory(appRouter)({});
 const user = { id: "user_1", email: "a@example.com", name: "Ada" };
@@ -17,6 +18,16 @@ const queryRaw = vi.mocked(db.$queryRaw);
 
 function sqlText(sql: Prisma.Sql) {
   return sql.sql.replace(/\s+/g, " ").trim();
+}
+
+// search runs a page query and a totals query; answer each by its SQL.
+function mockSearch(parcels: object[], total: number, totalHomes = 0) {
+  queryRaw.mockImplementation(((strings: TemplateStringsArray) =>
+    Promise.resolve(
+      strings.join("").includes("count(*)")
+        ? [{ total, total_homes: totalHomes }]
+        : parcels,
+    )) as unknown as typeof queryRaw);
 }
 
 describe("buildParcelWhere", () => {
@@ -61,10 +72,14 @@ describe("parcels.search", () => {
 
   it("returns totals across all matches, the parcels and the filters it applied", async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(user);
-    queryRaw.mockResolvedValue([
-      { apn: "FAKE-001", max_homes: 10, total: 2, total_homes: 17 },
-      { apn: "FAKE-003", max_homes: 7, total: 2, total_homes: 17 },
-    ]);
+    mockSearch(
+      [
+        { apn: "FAKE-001", max_homes: 10 },
+        { apn: "FAKE-003", max_homes: 7 },
+      ],
+      2,
+      17,
+    );
 
     const result = await caller.parcels.search({ eligible: true });
 
@@ -76,12 +91,40 @@ describe("parcels.search", () => {
         { apn: "FAKE-001", max_homes: 10 },
         { apn: "FAKE-003", max_homes: 7 },
       ],
+      nextCursor: null,
+    });
+  });
+
+  it("returns the next page's offset while matches remain", async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue(user);
+    const page = Array.from({ length: SEARCH_PAGE_SIZE }, (_, i) => ({ apn: `FAKE-${i}` }));
+    mockSearch(page, SEARCH_PAGE_SIZE * 2 + 50);
+
+    const first = await caller.parcels.search({ cursor: 0 });
+    expect(first.nextCursor).toBe(SEARCH_PAGE_SIZE);
+
+    const second = await caller.parcels.search({ cursor: SEARCH_PAGE_SIZE });
+    expect(second.nextCursor).toBe(SEARCH_PAGE_SIZE * 2);
+    expect(second.filters).toEqual({ sort: "homes" });
+  });
+
+  it("ends paging on the last page", async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue(user);
+    mockSearch([{ apn: "FAKE-450" }], SEARCH_PAGE_SIZE + 1);
+    const result = await caller.parcels.search({ cursor: SEARCH_PAGE_SIZE });
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it("rejects a negative cursor", async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue(user);
+    await expect(caller.parcels.search({ cursor: -1 })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
     });
   });
 
   it("returns zero totals when nothing matches", async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(user);
-    queryRaw.mockResolvedValue([]);
+    mockSearch([], 0);
     const result = await caller.parcels.search({ minHomes: 10 });
     expect(result).toMatchObject({ total: 0, totalHomes: 0, parcels: [] });
   });

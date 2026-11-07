@@ -1,8 +1,8 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import {
-  parcelFiltersSchema,
-  SEARCH_RESULT_LIMIT,
+  parcelSearchInputSchema,
+  SEARCH_PAGE_SIZE,
   type ParcelFilters,
   type ParcelSort,
 } from "@/lib/parcel-filters";
@@ -26,15 +26,6 @@ export type ParcelResult = {
   lng: number;
   lat: number;
 };
-
-type SearchRow = ParcelResult & { total: number; total_homes: number };
-
-function withoutTotals(row: SearchRow): ParcelResult {
-  const parcel: Partial<SearchRow> = { ...row };
-  delete parcel.total;
-  delete parcel.total_homes;
-  return parcel as ParcelResult;
-}
 
 export function buildParcelWhere(filters: ParcelFilters): Prisma.Sql {
   const conditions: Prisma.Sql[] = [];
@@ -84,37 +75,55 @@ export function buildParcelWhere(filters: ParcelFilters): Prisma.Sql {
 }
 
 const ORDER_BY: Record<ParcelSort, Prisma.Sql> = {
-  homes: Prisma.sql`max_homes DESC NULLS LAST, lot_sqft DESC NULLS LAST`,
-  lot: Prisma.sql`lot_sqft DESC NULLS LAST`,
-  value: Prisma.sql`assessed_value ASC NULLS LAST`,
-  transit: Prisma.sql`dist_transit_ft ASC NULLS LAST`,
+  homes: Prisma.sql`max_homes DESC NULLS LAST, lot_sqft DESC NULLS LAST, apn`,
+  lot: Prisma.sql`lot_sqft DESC NULLS LAST, apn`,
+  value: Prisma.sql`assessed_value ASC NULLS LAST, apn`,
+  transit: Prisma.sql`dist_transit_ft ASC NULLS LAST, apn`,
 };
 
 export const parcelsRouter = router({
   search: protectedProcedure
-    .input(parcelFiltersSchema)
+    .input(parcelSearchInputSchema)
     .query(async ({ input }) => {
-      // Window totals run before LIMIT, so the count covers every match.
-      const rows = await db.$queryRaw<SearchRow[]>`
-        SELECT apn, address, zone, lot_sqft, vacant, vacant_confidence,
-               sb684_eligible, max_homes, eligibility_reason, assessed_value,
-               dist_transit_ft, flood_zone, neighborhood,
-               ST_AsGeoJSON(geom)::json AS geometry,
-               ST_X(ST_PointOnSurface(geom)) AS lng,
-               ST_Y(ST_PointOnSurface(geom)) AS lat,
-               (count(*) OVER ())::int AS total,
-               (coalesce(sum(max_homes) OVER (), 0))::int AS total_homes
-        FROM parcels
-        ${buildParcelWhere(input)}
-        ORDER BY ${ORDER_BY[input.sort]}, apn
-        LIMIT ${SEARCH_RESULT_LIMIT}
-      `;
+      const { cursor, ...filters } = input;
+      const where = buildParcelWhere(filters);
+      const orderBy = ORDER_BY[filters.sort];
 
+      // The page is picked from narrow columns first, so geometry is built
+      // only for its rows. Otherwise Postgres builds it for every row the
+      // OFFSET skips.
+      const [parcels, [totals]] = await Promise.all([
+        db.$queryRaw<ParcelResult[]>`
+          WITH page AS (
+            SELECT apn FROM parcels
+            ${where}
+            ORDER BY ${orderBy}
+            LIMIT ${SEARCH_PAGE_SIZE} OFFSET ${cursor}
+          )
+          SELECT apn, address, zone, lot_sqft, vacant, vacant_confidence,
+                 sb684_eligible, max_homes, eligibility_reason, assessed_value,
+                 dist_transit_ft, flood_zone, neighborhood,
+                 ST_AsGeoJSON(geom)::json AS geometry,
+                 ST_X(ST_PointOnSurface(geom)) AS lng,
+                 ST_Y(ST_PointOnSurface(geom)) AS lat
+          FROM parcels JOIN page USING (apn)
+          ORDER BY ${orderBy}
+        `,
+        db.$queryRaw<[{ total: number; total_homes: number }]>`
+          SELECT count(*)::int AS total,
+                 coalesce(sum(max_homes), 0)::int AS total_homes
+          FROM parcels
+          ${where}
+        `,
+      ]);
+
+      const next = cursor + parcels.length;
       return {
-        filters: input,
-        total: rows[0]?.total ?? 0,
-        totalHomes: rows[0]?.total_homes ?? 0,
-        parcels: rows.map(withoutTotals),
+        filters,
+        total: totals.total,
+        totalHomes: totals.total_homes,
+        parcels,
+        nextCursor: parcels.length > 0 && next < totals.total ? next : null,
       };
     }),
 

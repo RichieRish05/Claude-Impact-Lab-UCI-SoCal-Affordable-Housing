@@ -16,7 +16,7 @@ export const ZONE_GROUPS = {
   Multifamily: ["RM", "RMH"],
 } as const satisfies Record<string, readonly string[]>;
 
-export const SEARCH_RESULT_LIMIT = 200;
+export const SEARCH_PAGE_SIZE = 200;
 
 const count = z.number().int().nonnegative();
 
@@ -36,6 +36,12 @@ export const parcelFiltersSchema = z.object({
 });
 
 export type ParcelFilters = z.infer<typeof parcelFiltersSchema>;
+
+// The cursor is a row offset. It stays out of the filter schema so it never
+// lands in the URL or in the LLM tool's arguments.
+export const parcelSearchInputSchema = parcelFiltersSchema.extend({
+  cursor: z.number().int().nonnegative().default(0),
+});
 
 export const DEFAULT_FILTERS: ParcelFilters = { sort: "homes" };
 
