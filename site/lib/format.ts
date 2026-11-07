@@ -26,3 +26,28 @@ export function formatPercent(n: number | null): string {
 function trim(n: number): string {
   return n.toFixed(2).replace(/\.?0+$/, "");
 }
+
+const dayFormat = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+// For YYYY-MM-DD calendar days, which carry no time zone.
+export function formatDay(day: string): string {
+  return dayFormat.format(new Date(`${day}T00:00:00Z`));
+}
+
+const timestampFormat = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: "America/Los_Angeles",
+});
+
+export function formatTimestamp(value: string | Date): string {
+  return timestampFormat.format(new Date(value));
+}
