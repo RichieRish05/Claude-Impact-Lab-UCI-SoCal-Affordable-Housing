@@ -9,9 +9,9 @@ The imported `PRODUCT_SPECS.MD` is the source of truth for what gets built: Grou
 
 ## Spec vs. current code
 
-The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code is a Next.js scaffold with working Neon Auth, a landing page, and a placeholder `/dashboard`. None of the Groundwork product exists yet: no parcel data, PostGIS, search, LLM tools, or projects.
+The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code is a Next.js scaffold with working Neon Auth, a landing page, and a placeholder `/dashboard`. None of the Groundwork product exists yet beyond the `parcels` and `zone_rules` tables: no real parcel data, search, LLM tools, or projects.
 
-PostGIS isn't enabled on Neon yet. Prisma has no geometry type, so geometry columns need `Unsupported("geometry(...)")` and spatial queries go through `db.$queryRaw`. The spec's offline data jobs live in `../pipeline/`, a separate Python project that only writes rows into tables this schema defines.
+Prisma has no geometry type, so geometry columns need `Unsupported("geometry(...)")` and spatial queries go through `db.$queryRaw`. The spec's offline data jobs live in `../pipeline/`, a separate Python project that only writes rows into tables this schema defines.
 
 Required dependencies are also missing: tRPC, TanStack React Query, the Anthropic SDK, and a map library (MapLibre GL or Mapbox GL) aren't installed.
 
@@ -77,6 +77,9 @@ Prisma is the ORM, and all database queries must go through it. Import `db` from
 
 The Neon project is `UGCEditor` (`raspy-rice-16858150`), and local development uses its `dev` branch. `.neon` only sets the Neon CLI's target, while `DATABASE_URL` decides what the app and Prisma connect to. Run `neon link --project-id raspy-rice-16858150 --branch dev --no-env-pull` once per checkout.
 
+- **Parcels and zone rules:** `../pipeline/` fills `parcels` and `zone_rules`, and the app only reads them. Fields filled after the load step are nullable. `updated_at` has a database default because the pipeline writes without the Prisma client, so keep that default on any table the pipeline writes.
+- **Fake parcels:** `prisma/fake-parcels.sql` seeds 12 made-up Huntington Beach parcels, all with APNs starting `FAKE-`, so the app has data before the pipeline runs. Run it with `pnpm exec prisma db execute --file prisma/fake-parcels.sql`. The pipeline deletes them before loading real parcels.
+- **PostGIS:** enabled on the `dev` branch with `CREATE EXTENSION postgis`, which Prisma doesn't track, so enable it on any new branch before pushing the schema. The extension adds a `spatial_ref_sys` table to `public` that isn't in the schema. Prisma currently ignores it, but if `db push` or `migrate dev` ever proposes dropping it, refuse.
 - **Generated client:** it lives in `lib/generated/prisma`, is gitignored, and is rebuilt by `postinstall`. Run `pnpm exec prisma generate` after editing `prisma/schema.prisma`.
 - **Schema changes:** Prisma manages only the `public` schema; `neon_auth` belongs to Neon Auth. Edit `prisma/schema.prisma`, check which database `DATABASE_URL` points at, then pick the command by whether the change affects existing data:
   - **Additive changes use `pnpm exec prisma db push`:** new tables, and new columns that are nullable or have a default. Never pass `--accept-data-loss`; a data-loss warning means the change belongs in a migration.

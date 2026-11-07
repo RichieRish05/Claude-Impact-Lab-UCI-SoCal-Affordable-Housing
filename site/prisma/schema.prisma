@@ -8,3 +8,43 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// Filled by ../pipeline in stages, so everything after the load step is
+// nullable. zone has no foreign key because most zones are non-residential
+// and never get a zone_rules row. updated_at has a database default because
+// the pipeline writes without the Prisma client.
+model Parcel {
+  apn                String                                    @id
+  address            String?
+  geom               Unsupported("geometry(MultiPolygon, 4326)")
+  zone               String?
+  lot_sqft           Int?
+  vacant             Boolean?
+  vacant_confidence  Float?
+  sb684_eligible     Boolean?
+  max_homes          Int?
+  eligibility_reason String?
+  assessed_value     Int?
+  dist_transit_ft    Int?
+  flood_zone         String?
+  neighborhood       String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
+
+  @@index([geom], type: Gist)
+  @@map("parcels")
+}
+
+model ZoneRule {
+  zone           String    @id
+  rules_json     Json      @db.JsonB
+  source_section String
+  verified_by    String?
+  verified_at    DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
+
+  @@map("zone_rules")
+}
