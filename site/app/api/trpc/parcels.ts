@@ -118,26 +118,19 @@ export const parcelsRouter = router({
       };
     }),
 
+  // Raw SQL because Prisma's `distinct` dedupes in Node after fetching every
+  // row; this reads the table once and returns only the short lists.
   filterOptions: protectedProcedure.query(async () => {
-    const [zones, neighborhoods] = await Promise.all([
-      db.parcel.findMany({
-        where: { zone: { not: null } },
-        distinct: ["zone"],
-        select: { zone: true },
-        orderBy: { zone: "asc" },
-      }),
-      db.parcel.findMany({
-        where: { neighborhood: { not: null } },
-        distinct: ["neighborhood"],
-        select: { neighborhood: true },
-        orderBy: { neighborhood: "asc" },
-      }),
-    ]);
-    return {
-      zones: zones.flatMap((r) => (r.zone ? [r.zone] : [])),
-      neighborhoods: neighborhoods.flatMap((r) =>
-        r.neighborhood ? [r.neighborhood] : [],
-      ),
-    };
+    const [options] = await db.$queryRaw<
+      [{ zones: string[]; neighborhoods: string[] }]
+    >`
+      SELECT
+        coalesce(array_agg(DISTINCT zone ORDER BY zone)
+          FILTER (WHERE zone IS NOT NULL), '{}') AS zones,
+        coalesce(array_agg(DISTINCT neighborhood ORDER BY neighborhood)
+          FILTER (WHERE neighborhood IS NOT NULL), '{}') AS neighborhoods
+      FROM parcels
+    `;
+    return options;
   }),
 });

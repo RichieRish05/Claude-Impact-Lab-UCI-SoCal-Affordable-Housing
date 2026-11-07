@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/db", () => ({
-  db: { $queryRaw: vi.fn(), parcel: { findMany: vi.fn() } },
-}));
+vi.mock("@/lib/db", () => ({ db: { $queryRaw: vi.fn() } }));
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 
@@ -93,6 +91,27 @@ describe("parcels.search", () => {
     await expect(caller.parcels.search({ minHomes: 11 })).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
+  });
+});
+
+describe("parcels.filterOptions", () => {
+  it("rejects signed-out callers", async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue(null);
+    await expect(caller.parcels.filterOptions()).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    });
+    expect(queryRaw).not.toHaveBeenCalled();
+  });
+
+  it("returns the zone and neighborhood lists from one query", async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue(user);
+    queryRaw.mockResolvedValue([{ zones: ["RL", "RM"], neighborhoods: ["Downtown"] }]);
+
+    expect(await caller.parcels.filterOptions()).toEqual({
+      zones: ["RL", "RM"],
+      neighborhoods: ["Downtown"],
+    });
+    expect(queryRaw).toHaveBeenCalledTimes(1);
   });
 });
 
