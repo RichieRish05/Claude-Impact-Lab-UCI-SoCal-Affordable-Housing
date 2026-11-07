@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-The offline data jobs from the "Data and eligibility engine" section of `../site/PRODUCT_SPECS.MD`: load parcels and zoning into PostGIS, extract zone rules with the LLM, compute per-parcel eligibility, and store the results. The app only reads the columns these jobs fill. None of the steps are written yet.
+The offline data jobs from the "Data and eligibility engine" section of `../site/PRODUCT_SPECS.MD`: load parcels and zoning into PostGIS, extract zone rules with the LLM, compute per-parcel eligibility, and store the results. The app only reads the columns these jobs fill. Written so far: `fetch.py` (downloads) and `load.py` (step 1).
 
 ## Setup and commands
 
@@ -11,7 +11,7 @@ uv add <package>                 # add a dependency; never pip install
 uv run python <script>.py        # run a step
 ```
 
-Put source downloads (parcel landbase, zoning layer, code text) in `raw/`, which is gitignored.
+Put source downloads (parcel landbase, zoning layer, code text) in `raw/`, which is gitignored. `uv run python fetch.py` downloads the OC landbase (Huntington Beach envelope) and the city zoning layer there; `uv run python load.py --dry-run` builds parcels without writing.
 
 ## Rules
 
@@ -21,4 +21,6 @@ Put source downloads (parcel landbase, zoning layer, code text) in `raw/`, which
 - **Eligibility lives here only.** SB 684/1123 checks, `max_homes`, and `eligibility_reason` are computed in this folder and stored. The app reads the stored columns and never reimplements the rules.
 - **The LLM extracts zone rules once.** Store the source section with each zone's rules, and don't use a zone until a person has spot-checked it against the code text.
 - **Database URL:** use Neon's direct host, without `-pooler`, because bulk loads can fail through PgBouncer. SQLAlchemy needs the `postgresql+psycopg://` scheme.
+- **ArcGIS downloads:** these servers return short pages and repeat or skip rows under offset paging, so `fetch.py` lists object IDs first and fetches them in chunks.
+- **Shared lots:** condo and mobile-home units each have an APN on the whole common lot. `load.py` drops APNs whose polygon is identical to another APN's, since they aren't buildable land.
 - **Comments:** keep them minimal, as in `../site/CLAUDE.md`.
