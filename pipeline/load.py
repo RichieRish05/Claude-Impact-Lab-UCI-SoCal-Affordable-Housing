@@ -25,11 +25,13 @@ def read_zoning():
 
 
 def district(code, zone_type):
-    # Base district that zone_rules is keyed by: "RL-CZ-O" -> RL, "(Q)RMH-A" -> RMH, "SP14" -> SP14.
-    if zone_type == "Q":
-        return re.sub(r"^\(Q\)", "", code).split("-")[0]
-    if zone_type == "SP":
-        return code.split("-")[0]
+    # District that zone_rules is keyed by: "RL-CZ-O" -> RL, "(Q)RMH-A" -> RMH-A, "SP14" -> SP14.
+    # RMH-A is a subdistrict with its own column in the §210.06 standards.
+    base = re.sub(r"^\(Q\)", "", code)
+    if base.startswith("RMH-A"):
+        return "RMH-A"
+    if zone_type in ("Q", "SP"):
+        return base.split("-")[0]
     return zone_type
 
 

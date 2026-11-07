@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-The offline data jobs from the "Data and eligibility engine" section of `../site/PRODUCT_SPECS.MD`: load parcels and zoning into PostGIS, extract zone rules with the LLM, compute per-parcel eligibility, and store the results. The app only reads the columns these jobs fill. Written so far: `fetch.py` (downloads) and `load.py` (step 1).
+The offline data jobs from the "Data and eligibility engine" section of `../site/PRODUCT_SPECS.MD`: load parcels and zoning into PostGIS, extract zone rules with the LLM, compute per-parcel eligibility, and store the results. The app only reads the columns these jobs fill. Written so far: `fetch.py` (downloads), `load.py` (step 1), and `extract_zones.py` (steps 2 and 3: extraction, then `show` and `verify` for the spot-check).
 
 ## Setup and commands
 
@@ -23,4 +23,5 @@ Put source downloads (parcel landbase, zoning layer, code text) in `raw/`, which
 - **Database URL:** use Neon's direct host, without `-pooler`, because bulk loads can fail through PgBouncer. SQLAlchemy needs the `postgresql+psycopg://` scheme.
 - **ArcGIS downloads:** these servers return short pages and repeat or skip rows under offset paging, so `fetch.py` lists object IDs first and fetches them in chunks.
 - **Shared lots:** condo and mobile-home units each have an APN on the whole common lot. `load.py` drops APNs whose polygon is identical to another APN's, since they aren't buildable land.
+- **Zone rules source:** `raw/code/ord4308.pdf` is Ordinance 4308 (2024), which restates §210.06 for RL, RM, RMH, RMH-A, RH, and RMP. It doesn't include parking (Ch. 231) or specific plans, and the spot-check should confirm it is still the current code.
 - **Comments:** keep them minimal, as in `../site/CLAUDE.md`.
