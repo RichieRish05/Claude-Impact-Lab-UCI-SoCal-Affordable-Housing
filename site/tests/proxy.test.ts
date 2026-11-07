@@ -36,7 +36,7 @@ describe("proxy", () => {
     "/api/auth/get-session",
     "/api/auth/callback/google",
     "/api/inngest",
-    "/api/me",
+    "/api/trpc/parcels.search",
     "/_next/static/chunk.js",
     "/favicon.ico",
   ])("does not run on %s", (url) => {

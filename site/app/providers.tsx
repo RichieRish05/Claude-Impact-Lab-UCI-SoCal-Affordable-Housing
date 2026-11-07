@@ -4,6 +4,7 @@ import { NeonAuthUIProvider } from "@neondatabase/auth-ui";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth/client";
+import { TRPCReactProvider } from "@/lib/trpc/client";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -20,7 +21,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       redirectTo="/dashboard"
       Link={Link}
     >
-      {children}
+      <TRPCReactProvider>{children}</TRPCReactProvider>
     </NeonAuthUIProvider>
   );
 }
