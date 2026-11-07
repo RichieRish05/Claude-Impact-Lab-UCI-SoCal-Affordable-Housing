@@ -9,8 +9,11 @@ import {
   SORT_LABELS,
   type ParcelSort,
 } from "@/lib/parcel-filters";
+import { useAssistant } from "@/lib/hooks/use-assistant";
 import { useParcelFilters } from "@/lib/hooks/use-parcel-filters";
 import { useTRPC } from "@/lib/trpc/client";
+import { AskBox } from "./ask-box";
+import { FilterChips } from "./filter-chips";
 import { FilterPanel } from "./filter-panel";
 import { ParcelMap, resultsKey } from "@/components/parcel-map";
 import { ResultsList } from "./results-list";
@@ -43,6 +46,8 @@ export function ParcelSearch() {
   const setSelectedApn = (apn: string | null) =>
     setSelection(apn ? { apn, resultsKey: currentKey } : null);
 
+  const assistant = useAssistant({ filters, selectedApn, onFilters: setFilters });
+
   return (
     <div className="grid min-h-0 grow grid-rows-[auto_20rem_auto] lg:grid-cols-[17rem_1fr_24rem] lg:grid-rows-1">
       <aside className="border-b border-border lg:overflow-y-auto lg:border-r lg:border-b-0">
@@ -62,6 +67,17 @@ export function ParcelSearch() {
           selectedApn={selectedApn}
           onSelect={setSelectedApn}
         />
+        <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex flex-col gap-2 [&>*]:pointer-events-auto">
+          <AskBox
+            onAsk={assistant.ask}
+            pending={assistant.pending}
+            reply={assistant.reply}
+            error={assistant.error}
+            onClear={assistant.clear}
+          >
+            <FilterChips filters={filters} onChange={setFilters} />
+          </AskBox>
+        </div>
       </section>
 
       <section

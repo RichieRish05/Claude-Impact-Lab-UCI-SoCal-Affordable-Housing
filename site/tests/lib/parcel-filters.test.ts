@@ -27,6 +27,8 @@ describe("parcel filters in the URL", () => {
       maxTransitFt: 1320,
       excludeFlood: true,
       neighborhoods: ["Oak View", "Downtown"],
+      nearStreet: "Beach Blvd",
+      nearMi: 0.5,
       sort: "transit",
     };
     expect(filtersFromSearchParams(filtersToSearchParams(filters))).toEqual(filters);
@@ -37,6 +39,14 @@ describe("parcel filters in the URL", () => {
       sort: "homes",
       vacant: true,
     });
+  });
+
+  it("drops the radius when there is no street", () => {
+    expect(parse("mi=1")).toEqual({ sort: "homes" });
+  });
+
+  it("drops a radius outside 0.1 to 2 miles", () => {
+    expect(parse("street=Beach%20Blvd&mi=5")).toEqual({ sort: "homes", nearStreet: "Beach Blvd" });
   });
 
   it("dedupes and ignores empty list values", () => {

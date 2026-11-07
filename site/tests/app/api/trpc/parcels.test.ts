@@ -5,7 +5,7 @@ vi.mock("@/lib/auth/session", () => ({ getCurrentUser: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 
 import { createCallerFactory } from "@/app/api/trpc/init";
-import { buildParcelWhere } from "@/app/api/trpc/parcels";
+import { buildParcelWhere, PARCEL_RESULT_COLUMNS, searchSummary } from "@/app/api/trpc/parcels";
 import { appRouter } from "@/app/api/trpc/router";
 import { getCurrentUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -63,6 +63,40 @@ describe("buildParcelWhere", () => {
   });
 });
 
+describe("buildParcelWhere near a street", () => {
+  it("keeps lots within the default half mile of the street's lots", () => {
+    const where = buildParcelWhere({ sort: "homes", nearStreet: "Beach Blvd" });
+    expect(sqlText(where)).toContain("ST_Intersects(geom");
+    expect(where.values).toEqual(expect.arrayContaining(["beach", "blvd", 2640]));
+  });
+
+  it("uses the radius it is given", () => {
+    const where = buildParcelWhere({ sort: "homes", nearStreet: "Beach Blvd", nearMi: 1 });
+    expect(where.values).toContain(5280);
+  });
+
+  it("matches any suffix when none is typed", () => {
+    const where = buildParcelWhere({ sort: "homes", nearStreet: "Beach" });
+    expect(where.values).toContain("beach");
+    expect(where.values).not.toContain("blvd");
+    expect(where.values).toContain(null);
+  });
+});
+
+describe("searchSummary", () => {
+  it("returns totals and the top lots without building geometry", async () => {
+    queryRaw.mockClear();
+    mockSearch([{ apn: "FAKE-001", max_homes: 10 }], 1, 10);
+    const result = await searchSummary({ sort: "homes", eligible: true }, 10);
+    expect(result).toEqual({ total: 1, totalHomes: 10, parcels: [{ apn: "FAKE-001", max_homes: 10 }] });
+    const pageSql = queryRaw.mock.calls
+      .map(([strings]) => (strings as unknown as string[]).join(""))
+      .find((text) => !text.includes("count(*)"));
+    expect(pageSql).toBeDefined();
+    expect(pageSql).not.toContain("ST_AsGeoJSON");
+  });
+});
+
 describe("parcels.search", () => {
   it("rejects signed-out callers", async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(null);
@@ -106,6 +140,19 @@ describe("parcels.search", () => {
     const second = await caller.parcels.search({ cursor: SEARCH_PAGE_SIZE });
     expect(second.nextCursor).toBe(SEARCH_PAGE_SIZE * 2);
     expect(second.filters).toEqual({ sort: "homes" });
+  });
+
+  it("returns each lot's zone code citation", async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue(user);
+    queryRaw.mockClear();
+    mockSearch([{ apn: "FAKE-001", source_section: "HBZSO §210.06" }], 1);
+    const result = await caller.parcels.search({});
+    expect(result.parcels[0].source_section).toBe("HBZSO §210.06");
+    const pageSql = queryRaw.mock.calls
+      .map(([strings]) => (strings as unknown as string[]).join(""))
+      .find((text) => text.includes("JOIN page"));
+    expect(pageSql).toContain("zone_rules");
+    expect(sqlText(PARCEL_RESULT_COLUMNS)).toContain("source_section");
   });
 
   it("ends paging on the last page", async () => {

@@ -1,3 +1,4 @@
+import { assistantRouter } from "./assistant";
 import { protectedProcedure, router } from "./init";
 import { parcelsRouter } from "./parcels";
 import { projectsRouter } from "./projects";
@@ -9,6 +10,7 @@ export const appRouter = router({
   })),
   parcels: parcelsRouter,
   projects: projectsRouter,
+  assistant: assistantRouter,
 });
 
 export type AppRouter = typeof appRouter;

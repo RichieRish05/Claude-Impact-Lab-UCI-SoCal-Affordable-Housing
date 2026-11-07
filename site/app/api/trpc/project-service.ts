@@ -170,6 +170,7 @@ export async function getProject(user: User, id: string): Promise<ProjectDetail>
   const parcels = await db.$queryRaw<ParcelResult[]>`
     SELECT ${PARCEL_RESULT_COLUMNS}
     FROM parcels JOIN project_parcels pp USING (apn)
+    LEFT JOIN zone_rules USING (zone)
     WHERE pp.project_id = ${id}
     ORDER BY pp.created_at, apn
   `;

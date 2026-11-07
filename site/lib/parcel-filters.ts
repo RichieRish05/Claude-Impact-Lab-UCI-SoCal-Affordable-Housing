@@ -10,13 +10,15 @@ export const SORT_LABELS: Record<ParcelSort, string> = {
   transit: "Distance to transit",
 };
 
-// Provisional until the spec's open question on HB zone codes is settled.
+// Mirrors zone_rules.rules_json.housing_type; RMP is a mobile-home park zone.
 export const ZONE_GROUPS = {
   "Single-family": ["RL"],
-  Multifamily: ["RM", "RMH"],
+  Multifamily: ["RM", "RMH", "RMH-A", "RH"],
 } as const satisfies Record<string, readonly string[]>;
 
 export const SEARCH_PAGE_SIZE = 200;
+
+export const NEAR_DEFAULT_MI = 0.5;
 
 const count = z.number().int().nonnegative();
 
@@ -32,6 +34,8 @@ export const parcelFiltersSchema = z.object({
   maxTransitFt: count.optional(),
   excludeFlood: z.boolean().optional(),
   neighborhoods: z.array(z.string().min(1)).max(50).optional(),
+  nearStreet: z.string().trim().min(1).max(80).optional(),
+  nearMi: z.number().min(0.1).max(2).optional(),
   sort: z.enum(PARCEL_SORTS).default("homes"),
 });
 
@@ -59,6 +63,8 @@ const PARAM: Record<Field, string> = {
   maxTransitFt: "transit",
   excludeFlood: "noFlood",
   neighborhoods: "hood",
+  nearStreet: "street",
+  nearMi: "mi",
 };
 
 const BOOLEAN_FIELDS = ["eligible", "vacant", "excludeFlood"] as const;
@@ -69,6 +75,7 @@ const NUMBER_FIELDS = [
   "minHomes",
   "maxValue",
   "maxTransitFt",
+  "nearMi",
 ] as const;
 const LIST_FIELDS = ["zones", "neighborhoods"] as const;
 
@@ -96,6 +103,9 @@ export function filtersFromSearchParams(params: URLSearchParams): ParcelFilters 
     const parsed = shape[field].safeParse(values);
     if (parsed.success) filters[field] = parsed.data;
   }
+  const street = shape.nearStreet.safeParse(params.get(PARAM.nearStreet) ?? undefined);
+  if (street.success && street.data !== undefined) filters.nearStreet = street.data;
+  else delete filters.nearMi;
   return filters;
 }
 
@@ -111,6 +121,7 @@ export function filtersToSearchParams(filters: ParcelFilters): URLSearchParams {
   for (const field of LIST_FIELDS) {
     for (const value of filters[field] ?? []) params.append(PARAM[field], value);
   }
+  if (filters.nearStreet) params.set(PARAM.nearStreet, filters.nearStreet);
   if (filters.sort !== DEFAULT_FILTERS.sort) params.set("sort", filters.sort);
   return params;
 }

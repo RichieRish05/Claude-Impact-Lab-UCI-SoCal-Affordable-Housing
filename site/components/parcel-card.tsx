@@ -95,6 +95,11 @@ export function ParcelCard({
       {parcel.eligibility_reason && (
         <p className="mt-3 rounded-md border border-border bg-background p-3 text-xs leading-relaxed">
           {parcel.eligibility_reason}
+          {parcel.source_section && (
+            <span className="mt-1.5 block text-[11px] text-muted-foreground">
+              Zoning code: {parcel.source_section}
+            </span>
+          )}
         </p>
       )}
       <p className="mt-2 text-[11px] text-muted-foreground">

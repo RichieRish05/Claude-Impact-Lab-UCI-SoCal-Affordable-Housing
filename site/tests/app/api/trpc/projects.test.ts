@@ -412,6 +412,8 @@ describe("projects", () => {
     const detail = await caller.projects.get({ id: "p1" });
 
     expect(detail.parcels).toEqual([{ apn: "FAKE-001" }]);
+    const [strings] = vi.mocked(db.$queryRaw).mock.calls[0];
+    expect((strings as unknown as string[]).join("")).toContain("LEFT JOIN zone_rules");
     expect(detail.checklist.map((item) => item.key)).toEqual(
       CHECKLIST_ITEMS.map((item) => item.key),
     );

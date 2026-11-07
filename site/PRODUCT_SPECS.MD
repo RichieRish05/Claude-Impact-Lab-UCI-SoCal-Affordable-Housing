@@ -112,7 +112,7 @@ Example queries for testing
 Query
 Expected behavior
 Where can I build 10 starter homes in Huntington Beach?
-Vacant, eligible lots with max_homes = 10
+Eligible lots with max_homes = 10 ("starter homes" means eligible; vacant is added only when asked)
 Show vacant single-family lots under an acre
 Vacant, single-family zone, area < 43,560 sq ft
 Lots that fit 4+ homes within half a mile of a park
@@ -337,7 +337,7 @@ Cached responses for the scripted queries plus a recorded video
 Judges question legal accuracy
 State clearly it is a screening tool, not legal advice; show the verification step
 Open questions
-[ ] Does HB's zoning layer download cleanly, and which zone codes count as single-family vs. multifamily?
+[x] Does HB's zoning layer download cleanly, and which zone codes count as single-family vs. multifamily? Yes. Single-family is RL; multifamily is RM, RMH, RMH-A and RH; RMP is a mobile-home park zone. The search's zone groups follow zone_rules.
 [ ] Has HB's June 2026 housing element changed any zoning we should reflect?
 [ ] Which 10 to 20 funding programs do we seed, and does anyone on the team know their eligibility rules?
 [ ] Can we get a planner or housing attorney to review the rules for 30 minutes?
