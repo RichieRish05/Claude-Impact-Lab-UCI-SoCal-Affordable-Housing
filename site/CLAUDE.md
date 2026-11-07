@@ -11,16 +11,9 @@ The imported `PRODUCT_SPECS.MD` is the source of truth for what gets built: Stac
 
 The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code is a Next.js scaffold with working Neon Auth, carried over from an earlier project. None of the StackUp product exists yet: no `lib/match.ts`, `lib/plan.ts`, `lib/types.ts`, `data/rules/`, `scripts/`, or `/api/profile`, and `app/page.tsx` is still the `create-next-app` starter.
 
-Where the spec and the code disagree:
+Dependencies the spec calls for are also missing: no Postgres client or Anthropic SDK is installed, and `pnpm ingest` doesn't exist yet.
 
-| Topic | Spec says | Repo has |
-|---|---|---|
-| Package manager | `npm run ...` | pnpm (`packageManager` field, `pnpm-lock.yaml`). Use pnpm. |
-| `typecheck`, `ingest` scripts | Exist | Not in `package.json` yet. Add them when needed; use the typecheck command below until then. |
-| Backend | Supabase for profiles and tracker state | Neon Auth (`neon.ts`, `@neondatabase/*`). No Supabase or database client is installed. |
-| Claude API | Used for ingest and explanations | No Anthropic SDK installed. |
-
-**The Supabase vs. Neon choice is unresolved, so ask before adding a database client.** Likewise, ask whether StackUp keeps login at all: the spec doesn't mention user accounts, and the form must work end to end as the demo path.
+Intake requires login, so new pages such as onboarding need `requirePageUser()` and an entry in the `proxy.ts` matcher, which currently covers only `/dashboard`. Signed-in users without a profile may use only onboarding, on both pages and APIs. That gate is still to build: `lib/auth/guards.ts` checks only for a session, and `providers.tsx` sends every sign-in to `/dashboard`. Enforce it in the guards, because `proxy.ts` is only an optimistic redirect. `assertOwner` expects `userId`, while the `UserProfile` contract uses `user_id`, so map the field when calling it.
 
 `docs/superpowers/` and the `/dashboard` page date from the earlier project. Their auth design is still accurate, but they contain no StackUp requirements.
 
