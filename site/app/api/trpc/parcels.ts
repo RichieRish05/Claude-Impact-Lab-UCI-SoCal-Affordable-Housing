@@ -1,11 +1,13 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@/lib/generated/prisma/client";
 import {
+  NEAR_DEFAULT_MI,
   parcelSearchInputSchema,
   SEARCH_PAGE_SIZE,
   type ParcelFilters,
   type ParcelSort,
 } from "@/lib/parcel-filters";
+import { normalizeStreet, SUFFIXES } from "@/lib/streets";
 import { protectedProcedure, router } from "./init";
 
 export type ParcelResult = {
@@ -22,10 +24,45 @@ export type ParcelResult = {
   dist_transit_ft: number | null;
   flood_zone: string | null;
   neighborhood: string | null;
+  source_section: string | null;
   geometry: GeoJSON.MultiPolygon;
   lng: number;
   lat: number;
 };
+
+const FEET_PER_MILE = 5280;
+
+const ALL_SPELLINGS = Object.values(SUFFIXES).flat().join("|");
+
+// The same normalization as normalizeStreet, applied to the street part of
+// "424 19th St, Huntington Beach, CA": drop the house number, unit or space
+// numbers, and a leading direction letter. Built only from constants.
+const STREET = Prisma.raw(`regexp_replace(regexp_replace(regexp_replace(
+    lower(trim(split_part(address, ',', 1))),
+    '^\\S+\\s+', ''),
+    '\\s+(spc|unit|apt|ste)(\\s.*)?$|\\s*#.*$', ''),
+    '^[nsew]\\s+(?=\\S)', '')`);
+const STREET_BASE = Prisma.raw(
+  `regexp_replace(${STREET.sql}, '\\s+(${ALL_SPELLINGS})$', '')`,
+);
+const STREET_SUFFIX = Prisma.raw(
+  `CASE substring(${STREET.sql} from '\\s(${ALL_SPELLINGS})$') ${Object.entries(SUFFIXES)
+    .flatMap(([canonical, spellings]) => spellings.map((s) => `WHEN '${s}' THEN '${canonical}'`))
+    .join(" ")} END`,
+);
+
+export function streetMatchSql(street: string): Prisma.Sql {
+  const name = normalizeStreet(street);
+  if (!name) return Prisma.sql`false`;
+  return Prisma.sql`(${STREET_BASE} = ${name.base} AND (${name.suffix}::text IS NULL OR ${STREET_SUFFIX} = ${name.suffix}))`;
+}
+
+export async function countStreetLots(street: string): Promise<number> {
+  const [row] = await db.$queryRaw<[{ count: number }]>`
+    SELECT count(*)::int AS count FROM parcels WHERE ${streetMatchSql(street)}
+  `;
+  return row.count;
+}
 
 export function buildParcelWhere(filters: ParcelFilters): Prisma.Sql {
   const conditions: Prisma.Sql[] = [];
@@ -69,6 +106,16 @@ export function buildParcelWhere(filters: ParcelFilters): Prisma.Sql {
     );
   }
 
+  if (filters.nearStreet) {
+    const feet = (filters.nearMi ?? NEAR_DEFAULT_MI) * FEET_PER_MILE;
+    // Buffering the street once in California State Plane VI (US feet), then
+    // intersecting, uses the geom index; ST_DWithin on geography against the
+    // union scanned every lot and took seconds.
+    conditions.push(Prisma.sql`ST_Intersects(geom, (
+      SELECT ST_Transform(ST_Buffer(ST_Transform(ST_Union(geom), 2230), ${feet}), 4326)
+      FROM parcels WHERE ${streetMatchSql(filters.nearStreet)}))`);
+  }
+
   return conditions.length
     ? Prisma.sql`WHERE ${Prisma.join(conditions, " AND ")}`
     : Prisma.empty;
@@ -81,6 +128,36 @@ const ORDER_BY: Record<ParcelSort, Prisma.Sql> = {
   transit: Prisma.sql`dist_transit_ft ASC NULLS LAST, apn`,
 };
 
+async function searchTotals(where: Prisma.Sql) {
+  const [totals] = await db.$queryRaw<[{ total: number; total_homes: number }]>`
+    SELECT count(*)::int AS total,
+           coalesce(sum(max_homes), 0)::int AS total_homes
+    FROM parcels
+    ${where}
+  `;
+  return { total: totals.total, totalHomes: totals.total_homes };
+}
+
+export type ParcelSummary = Pick<
+  ParcelResult,
+  "apn" | "address" | "zone" | "lot_sqft" | "max_homes" | "assessed_value"
+>;
+
+export async function searchSummary(filters: ParcelFilters, limit: number) {
+  const where = buildParcelWhere(filters);
+  const [totals, parcels] = await Promise.all([
+    searchTotals(where),
+    db.$queryRaw<ParcelSummary[]>`
+      SELECT apn, address, zone, lot_sqft, max_homes, assessed_value
+      FROM parcels
+      ${where}
+      ORDER BY ${ORDER_BY[filters.sort]}
+      LIMIT ${limit}
+    `,
+  ]);
+  return { ...totals, parcels };
+}
+
 export const parcelsRouter = router({
   search: protectedProcedure
     .input(parcelSearchInputSchema)
@@ -92,7 +169,7 @@ export const parcelsRouter = router({
       // The page is picked from narrow columns first, so geometry is built
       // only for its rows. Otherwise Postgres builds it for every row the
       // OFFSET skips.
-      const [parcels, [totals]] = await Promise.all([
+      const [parcels, totals] = await Promise.all([
         db.$queryRaw<ParcelResult[]>`
           WITH page AS (
             SELECT apn FROM parcels
@@ -102,26 +179,21 @@ export const parcelsRouter = router({
           )
           SELECT apn, address, zone, lot_sqft, vacant, vacant_confidence,
                  sb684_eligible, max_homes, eligibility_reason, assessed_value,
-                 dist_transit_ft, flood_zone, neighborhood,
+                 dist_transit_ft, flood_zone, neighborhood, source_section,
                  ST_AsGeoJSON(geom)::json AS geometry,
                  ST_X(ST_PointOnSurface(geom)) AS lng,
                  ST_Y(ST_PointOnSurface(geom)) AS lat
           FROM parcels JOIN page USING (apn)
+          LEFT JOIN zone_rules USING (zone)
           ORDER BY ${orderBy}
         `,
-        db.$queryRaw<[{ total: number; total_homes: number }]>`
-          SELECT count(*)::int AS total,
-                 coalesce(sum(max_homes), 0)::int AS total_homes
-          FROM parcels
-          ${where}
-        `,
+        searchTotals(where),
       ]);
 
       const next = cursor + parcels.length;
       return {
         filters,
-        total: totals.total,
-        totalHomes: totals.total_homes,
+        ...totals,
         parcels,
         nextCursor: parcels.length > 0 && next < totals.total ? next : null,
       };
