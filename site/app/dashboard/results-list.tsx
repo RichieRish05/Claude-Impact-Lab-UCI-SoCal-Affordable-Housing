@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { ParcelResult } from "@/app/api/trpc/parcels";
 import { EligibilityBadge, ParcelCard } from "@/components/parcel-card";
+import { SaveToProject } from "@/components/save-to-project";
 import { formatSqft } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -64,7 +65,9 @@ export function ResultsList({ parcels, selectedApn, onSelect }: Props) {
                 <EligibilityBadge eligible={parcel.sb684_eligible} />
               </div>
             </button>
-            {selected && <ParcelCard parcel={parcel} />}
+            {selected && (
+              <ParcelCard parcel={parcel} actions={<SaveToProject apn={parcel.apn} />} />
+            )}
           </li>
         );
       })}
