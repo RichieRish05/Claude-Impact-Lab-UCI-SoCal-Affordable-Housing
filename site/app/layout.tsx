@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "StackUp",
+  title: "Groundwork",
   description:
-    "See the down payment assistance you qualify for, how it stacks, and what to apply for first.",
+    "Find Orange County lots that qualify for starter homes, and track each one from found to funded.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
