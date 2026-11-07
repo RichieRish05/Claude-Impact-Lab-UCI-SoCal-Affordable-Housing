@@ -21,7 +21,10 @@ describe("proxy", () => {
     expect(middlewareCalls).toEqual([[{ loginUrl: "/auth/sign-in" }]]);
   });
 
-  it.each(["/dashboard", "/dashboard/settings", "/dashboard?tab=exports"])(
+  it.each(["/dashboard", "/dashboard/settings", "/dashboard?tab=exports",
+    "/projects",
+    "/projects/abc",
+  ])(
     "runs on protected path %s",
     (url) => {
       expect(matches(url)).toBe(true);
@@ -31,6 +34,7 @@ describe("proxy", () => {
   it.each([
     "/",
     "/dashboard-old",
+    "/projects-old",
     "/auth/sign-in",
     "/auth/sign-up",
     "/api/auth/get-session",

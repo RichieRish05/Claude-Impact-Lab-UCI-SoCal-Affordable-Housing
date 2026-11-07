@@ -12,7 +12,7 @@ import {
 import { useParcelFilters } from "@/lib/hooks/use-parcel-filters";
 import { useTRPC } from "@/lib/trpc/client";
 import { FilterPanel } from "./filter-panel";
-import { ParcelMap, resultsKey } from "./parcel-map";
+import { ParcelMap, resultsKey } from "@/components/parcel-map";
 import { ResultsList } from "./results-list";
 
 export function ParcelSearch() {

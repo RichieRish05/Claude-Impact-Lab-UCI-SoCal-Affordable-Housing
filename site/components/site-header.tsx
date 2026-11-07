@@ -12,9 +12,14 @@ export async function SiteHeader() {
       <Wordmark />
       <nav className="flex items-center gap-2 text-sm">
         {user ? (
-          <Link href="/dashboard" className={primaryLink}>
-            Dashboard
-          </Link>
+          <>
+            <Link href="/projects" className="px-2.5 py-2">
+              Projects
+            </Link>
+            <Link href="/dashboard" className={primaryLink}>
+              Dashboard
+            </Link>
+          </>
         ) : (
           <>
             <Link href="/auth/sign-in" className="px-2.5 py-2">

@@ -21,7 +21,7 @@ Prisma has no geometry type, so geometry columns need `Unsupported("geometry(...
 - **Query:** `app/api/trpc/parcels.ts` builds the `WHERE` clause with `Prisma.sql` fragments, and returns `SEARCH_PAGE_SIZE` parcels per page. It runs two queries in parallel: one for the lot and home totals over every match, and one that picks the page's APNs from narrow columns before building geometry, so a deep `OFFSET` doesn't serialize every skipped polygon. The page offset is a `cursor` input outside `parcelFiltersSchema`, so it never reaches the URL or the LLM tool; the dashboard loads more pages with `useInfiniteQuery`, and the map draws every loaded page.
 - **Map:** MapLibre GL with OpenFreeMap's keyless Positron style. Lots are drawn as polygons from zoom 14 and as points below 15, because they're too small to see at city zoom.
 
-New pages that need a signed-in user need `requirePageUser()` and an entry in the `proxy.ts` matcher, which currently covers only `/dashboard`. Use `assertOwner` for owned rows such as projects; it expects a `userId` field, so map it from a snake_case column.
+New pages that need a signed-in user need `requirePageUser()` and an entry in the `proxy.ts` matcher, which currently covers `/dashboard` and `/projects`. Use `assertOwner` for owned rows such as projects; it expects a `userId` field, so map it from a snake_case column.
 
 `docs/superpowers/` dates from an earlier project. Its auth design is still accurate, but it contains no Groundwork requirements.
 

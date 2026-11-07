@@ -1,13 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { ParcelResult } from "@/app/api/trpc/parcels";
-import {
-  formatDollars,
-  formatFeet,
-  formatPercent,
-  formatSqft,
-} from "@/lib/format";
+import { EligibilityBadge, ParcelCard } from "@/components/parcel-card";
+import { formatSqft } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -73,97 +69,5 @@ export function ResultsList({ parcels, selectedApn, onSelect }: Props) {
         );
       })}
     </ul>
-  );
-}
-
-function EligibilityBadge({ eligible }: { eligible: boolean | null }) {
-  if (eligible === null) return null;
-  return (
-    <span
-      className={cn(
-        "mt-1 inline-block rounded px-1.5 py-0.5 text-[11px]",
-        eligible ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground",
-      )}
-    >
-      {eligible ? "SB 684" : "Not eligible"}
-    </span>
-  );
-}
-
-function CopyableLine({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string | null;
-  mono?: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    if (!value) return;
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <p className={cn("min-w-0 break-words select-text", mono && "font-mono text-xs")}>
-        <span className="sr-only">{label}: </span>
-        {value ?? `No ${label.toLowerCase()}`}
-      </p>
-      {value && (
-        <button
-          type="button"
-          onClick={copy}
-          aria-label={`Copy ${label.toLowerCase()}`}
-          className="shrink-0 cursor-pointer rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent"
-        >
-          <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
-        </button>
-      )}
-    </div>
-  );
-}
-
-function ParcelCard({ parcel }: { parcel: ParcelResult }) {
-  const facts: [string, string][] = [
-    ["Neighborhood", parcel.neighborhood ?? "—"],
-    [
-      "Vacant",
-      parcel.vacant === null
-        ? "—"
-        : `${parcel.vacant ? "Yes" : "No"} (${formatPercent(parcel.vacant_confidence)} confidence)`,
-    ],
-    ["Assessed value", formatDollars(parcel.assessed_value)],
-    ["Transit", formatFeet(parcel.dist_transit_ft)],
-    ["Flood zone", parcel.flood_zone ?? "None"],
-  ];
-
-  return (
-    <div className="px-5 pb-4 text-sm">
-      <div className="mb-3 space-y-1.5 rounded-md border border-border bg-background p-3">
-        <CopyableLine label="Address" value={parcel.address} />
-        <CopyableLine label="APN" value={parcel.apn} mono />
-      </div>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-        {facts.map(([label, value]) => (
-          <div key={label} className="contents">
-            <dt className="text-muted-foreground">{label}</dt>
-            <dd>{value}</dd>
-          </div>
-        ))}
-      </dl>
-      {parcel.eligibility_reason && (
-        <p className="mt-3 rounded-md border border-border bg-background p-3 text-xs leading-relaxed">
-          {parcel.eligibility_reason}
-        </p>
-      )}
-      <p className="mt-2 text-[11px] text-muted-foreground">
-        Screening estimate, not legal advice.
-      </p>
-    </div>
   );
 }
