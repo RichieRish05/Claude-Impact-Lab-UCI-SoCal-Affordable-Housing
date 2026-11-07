@@ -1,3 +1,7 @@
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+  # Its only install script is a Node version check, which fails installs on Node 23.
+  - prisma
+onlyBuiltDependencies:
+  - "@prisma/engines"

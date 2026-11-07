@@ -1,0 +1,10 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+// Connection URLs are not set here. The app connects through the adapter in
+// lib/db.ts, and the Prisma CLI reads its URL from prisma.config.ts.
+datasource db {
+  provider = "postgresql"
+}

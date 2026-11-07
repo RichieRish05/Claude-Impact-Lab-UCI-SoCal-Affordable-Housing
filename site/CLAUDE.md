@@ -11,7 +11,7 @@ The imported `PRODUCT_SPECS.MD` is the source of truth for what gets built: Stac
 
 The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code is a Next.js scaffold with working Neon Auth, carried over from an earlier project. None of the StackUp product exists yet: no `lib/match.ts`, `lib/plan.ts`, `lib/types.ts`, `lib/ingest/`, `program_rules` table, or `/api/profile`, and `app/page.tsx` is still the `create-next-app` starter.
 
-Dependencies the spec calls for are also missing: no Postgres client, Anthropic SDK, or Inngest SDK is installed. Check the current Inngest docs before building the pipeline; the spec's design wasn't validated against them.
+Dependencies the spec calls for are also missing: no Anthropic SDK or Inngest SDK is installed. Check the current Inngest docs before building the pipeline; the spec's design wasn't validated against them.
 
 Intake requires login, so new pages such as onboarding need `requirePageUser()` and an entry in the `proxy.ts` matcher, which currently covers only `/dashboard`. Signed-in users without a profile may use only onboarding, on both pages and APIs. Programs, Tracker, and Checklist also stay locked until the profile is complete, and the matcher must never run on an incomplete one. These gates are still to build: `lib/auth/guards.ts` checks only for a session, and `providers.tsx` sends every sign-in to `/dashboard`. Enforce it in the guards, because `proxy.ts` is only an optimistic redirect. `assertOwner` expects `userId`, while the `UserProfile` contract uses `user_id`, so map the field when calling it.
 
@@ -36,6 +36,16 @@ pnpm exec next typegen && pnpm exec tsc --noEmit   # typecheck
 - **Tests:** Vitest runs in the `node` environment and only picks up `tests/**/*.test.ts`, mirroring source paths. There is no jsdom, so `.tsx` component tests won't run without config changes.
 
 The `@/*` import alias maps to this directory.
+
+## Database
+
+Prisma is the ORM. `lib/db.ts` exports the only client (`db`), which connects over node-postgres using the pooled `DATABASE_URL`. The Prisma CLI uses Neon's direct host instead, because migrations can fail through PgBouncer: `prisma.config.ts` derives it by removing `-pooler` from `DATABASE_URL`. The schema has no models yet.
+
+- **Generated client:** it lives in `lib/generated/prisma`, is gitignored, and is rebuilt by `postinstall`. Run `pnpm exec prisma generate` after editing `prisma/schema.prisma`.
+- **Migrations:** `pnpm exec prisma migrate dev --name <name>`. Prisma manages only the `public` schema; `neon_auth` belongs to Neon Auth.
+- **Versions:** the Prisma packages are pinned to the same exact version, because `prisma`'s npm `latest` tag points at an 8.0 release candidate. Don't install `prisma@latest`.
+- **Node:** Prisma supports Node 20.19+, 22.12+, and 24+, not Node 23. Its install-time version check is disabled in `pnpm-workspace.yaml` so it can't fail `pnpm install`.
+- **Tests:** mock `@/lib/db`. It throws on import if `DATABASE_URL` is missing.
 
 ## Auth
 
