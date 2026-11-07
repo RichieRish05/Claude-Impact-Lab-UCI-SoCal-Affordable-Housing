@@ -57,7 +57,8 @@ def drop_shared_lots(parcels):
 
 def assessed_value(p):
     num = lambda c: pd.to_numeric(p[c].replace("", None), errors="coerce")
-    total = num("AssdAmt").fillna(num("LandVal") + num("ImprovedVal"))
+    # Vacant land has no improved value, which a plain + would turn into a missing total.
+    total = num("AssdAmt").fillna(num("LandVal").add(num("ImprovedVal"), fill_value=0))
     return total.round().astype("Int64")
 
 
@@ -73,12 +74,21 @@ def assign_zones(parcels, zoning):
 def address(row):
     if pd.isna(row.SiteAddress):
         return None
-    # The source uses "NA" for a missing house number.
-    street = string.capwords(re.sub(r"^NA\s+", "", row.SiteAddress.strip()))
-    if not street:
+    # "NA" marks a missing house number, and the street that follows is often a
+    # placeholder far from the lot, so it would send people to the wrong place.
+    site = row.SiteAddress.strip()
+    if not site or re.match(r"NA\b", site):
         return None
+    street = string.capwords(site)
     city = string.capwords(row.SiteCityState) if pd.notna(row.SiteCityState) else "Huntington Beach"
     return f"{street}, {city}, CA"
+
+
+def drop_unaddressed(parcels):
+    # Lots with no site address can't be found or checked by a user, and are mostly strips and common land.
+    missing = parcels["address"].isna()
+    print(f"dropped {missing.sum()} parcels with no site address")
+    return parcels[~missing]
 
 
 def to_multi(g):
@@ -95,6 +105,7 @@ def build():
     print(f"parcels in Huntington Beach: {len(parcels)}")
     parcels["lot_sqft"] = parcels.area.round().astype(int)
     parcels["address"] = parcels.apply(address, axis=1)
+    parcels = drop_unaddressed(parcels)
     out = parcels[["apn", "address", "zone", "lot_sqft", "assessed_value", "geometry"]].to_crs("EPSG:4326")
     out["geometry"] = out.geometry.make_valid().apply(to_multi)
     return out.rename_geometry("geom")
