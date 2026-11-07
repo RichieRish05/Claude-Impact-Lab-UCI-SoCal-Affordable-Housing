@@ -9,11 +9,17 @@ The imported `PRODUCT_SPECS.MD` is the source of truth for what gets built: Grou
 
 ## Spec vs. current code
 
-The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code is a Next.js scaffold with working Neon Auth, a landing page, and a placeholder `/dashboard`. None of the Groundwork product exists yet beyond the `parcels` and `zone_rules` tables: no real parcel data, search, LLM tools, or projects.
+The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code has working Neon Auth, a landing page, and the filter-panel search at `/dashboard`: map, filter panel and results list with a parcel card, backed by `parcels.search`. It runs against the fake parcels; there's no real parcel data yet.
+
+Search gaps against the spec: no natural-language chat or filter chips, no "near a place" or map-area filters, no CSV export, and the lot-size filter is min/max inputs rather than a slider. The single-family and multifamily zone groups in `lib/parcel-filters.ts` are provisional until the spec's open question on HB zone codes is settled. Projects, the pipeline board and funding don't exist, and the Anthropic SDK isn't installed.
 
 Prisma has no geometry type, so geometry columns need `Unsupported("geometry(...)")` and spatial queries go through `db.$queryRaw`. The spec's offline data jobs live in `../pipeline/`, a separate Python project that only writes rows into tables this schema defines.
 
-Required dependencies are also missing: tRPC, TanStack React Query, the Anthropic SDK, and a map library (MapLibre GL or Mapbox GL) aren't installed.
+## Search
+
+- **Filters:** `lib/parcel-filters.ts` defines the filter set once: the zod input schema for `parcels.search` and the URL encoding. The URL is the only filter state; `app/dashboard/use-parcel-filters.ts` writes it with `history.replaceState`, which updates `useSearchParams` without a server round trip. The LLM's `search_parcels` tool should take the same schema.
+- **Query:** `app/api/trpc/parcels.ts` builds the `WHERE` clause with `Prisma.sql` fragments, returns at most `SEARCH_RESULT_LIMIT` parcels, and computes the lot and home totals over every match with window functions.
+- **Map:** MapLibre GL with OpenFreeMap's keyless Positron style. Lots are drawn as polygons from zoom 14 and as points below 15, because they're too small to see at city zoom.
 
 New pages that need a signed-in user need `requirePageUser()` and an entry in the `proxy.ts` matcher, which currently covers only `/dashboard`. Use `assertOwner` for owned rows such as projects; it expects a `userId` field, so map it from a snake_case column.
 
@@ -37,7 +43,7 @@ Keep a plain route handler only when the caller dictates its own HTTP contract:
 - `app/api/inngest`: Inngest's `serve()` handler, which uses `GET`, `POST`, and `PUT` on a single endpoint.
 - Webhooks from third parties with a fixed request and response format that tRPC's `{ "result": { "data" } }` envelope and error statuses don't satisfy. Keep these routes thin adapters: put the logic in a tRPC procedure, call it with a server-side caller, and translate the outcome. A procedure that checks a webhook secret must check it itself, because it's also reachable at `/api/trpc`.
 
-`app/api/me` is a scaffold REST route. Replace it with a procedure once tRPC is set up.
+`app/api/trpc/init.ts` defines `publicProcedure` and `protectedProcedure`; `router.ts` merges routers into `appRouter`. Test procedures with `createCallerFactory(appRouter)({})`, as `tests/app/api/trpc/parcels.test.ts` does.
 
 ### Frontend data fetching
 
@@ -93,8 +99,8 @@ The Neon project is `UGCEditor` (`raspy-rice-16858150`), and local development u
 
 Neon Auth (email/password and Google). `lib/auth/server.ts` is the only server-side import of the SDK. All other server code goes through `lib/auth/guards.ts`, never `auth.getSession()`:
 
-- **tRPC procedures:** enforce `requireUser()` in shared middleware, call `assertOwner(user, row)` for owned resources, and map auth errors to `TRPCError` (`UNAUTHORIZED`, `NOT_FOUND`) rather than using `toErrorResponse`.
-- **Plain route handlers (the exceptions above):** where a route needs a user session, call `requireUser()` inside `try`, `assertOwner(user, row)` for owned resources, and `toErrorResponse(e)` in `catch` (401/404 JSON). `app/api/me/route.ts` shows this pattern until it's replaced.
+- **tRPC procedures:** use `protectedProcedure`, which runs `requireUser()` in shared middleware, call `assertOwner(user, row)` for owned resources, and map auth errors to `TRPCError` (`UNAUTHORIZED`, `NOT_FOUND`) rather than using `toErrorResponse`.
+- **Plain route handlers (the exceptions above):** where a route needs a user session, call `requireUser()` inside `try`, `assertOwner(user, row)` for owned resources, and `toErrorResponse(e)` in `catch` (401/404 JSON).
 - **Server actions:** use `requireUser()` and `assertOwner()`, but never return `toErrorResponse`, because an action can't return a `Response`. Let the error propagate or return `{ error }`.
 - **Pages:** call `requirePageUser()`, which redirects to `/auth/sign-in`. These pages must also be under the `proxy.ts` matcher, because the proxy refreshes the session cookie and a Server Component can't write it.
 
