@@ -1,3 +1,4 @@
+import { assistantRouter } from "./assistant";
 import { protectedProcedure, router } from "./init";
 import { parcelsRouter } from "./parcels";
 
@@ -7,6 +8,7 @@ export const appRouter = router({
     email: ctx.user.email,
   })),
   parcels: parcelsRouter,
+  assistant: assistantRouter,
 });
 
 export type AppRouter = typeof appRouter;
