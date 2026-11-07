@@ -1,33 +1,26 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
+import type { inferRouterOutputs } from "@trpc/server";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import type { AppRouter } from "@/app/api/trpc/router";
 import { formatCount } from "@/lib/format";
+import { CHECKLIST_ITEMS } from "@/lib/projects/checklist";
 import { clockLabel, reviewClock, todayInLA } from "@/lib/projects/review-clock";
 import { isApprovedOrLater, PROJECT_STAGES, STAGE_LABELS } from "@/lib/projects/stages";
 import { useTRPC } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 
-type BoardProject = {
-  id: string;
-  name: string;
-  stage: (typeof PROJECT_STAGES)[number];
-  lotCount: number;
-  homes: number;
-  checklistDone: number;
-  submittedOn: string | null;
-  approvedOn: string | null;
-  updatedAt: string | Date;
-};
+type BoardProject = inferRouterOutputs<AppRouter>["projects"]["list"][number];
 
 function Status({ project, today }: { project: BoardProject; today: string }) {
   const { submittedOn } = project;
   const clockApplies =
     project.stage === "application_submitted" || isApprovedOrLater(project.stage);
   if (!submittedOn || !clockApplies) {
-    return <span className="text-xs text-muted-foreground">Checklist {project.checklistDone}/8</span>;
+    return <span className="text-xs text-muted-foreground">Checklist {project.checklistDone}/{CHECKLIST_ITEMS.length}</span>;
   }
   const clock = reviewClock({
     submittedOn,
@@ -51,6 +44,12 @@ function NewProject() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const create = useMutation(trpc.projects.create.mutationOptions());
+
+  const close = () => {
+    setOpen(false);
+    setName("");
+    setError(null);
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,7 +83,7 @@ function NewProject() {
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Escape") setOpen(false);
+          if (e.key === "Escape") close();
         }}
         maxLength={120}
         placeholder="Project name"
@@ -98,7 +97,7 @@ function NewProject() {
       >
         {create.isPending ? "Creating…" : "Create"}
       </button>
-      <button type="button" onClick={() => setOpen(false)} className="text-sm text-muted-foreground">
+      <button type="button" onClick={close} className="text-sm text-muted-foreground">
         Cancel
       </button>
       {error && <span className="text-xs text-danger">{error}</span>}
@@ -119,7 +118,7 @@ export function ProjectBoard() {
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 p-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-lg font-medium">Projects · {projects.length}</h1>
+        <h1 className="text-lg font-medium">Projects{data ? ` · ${projects.length}` : ""}</h1>
         <NewProject />
       </div>
 
