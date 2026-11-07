@@ -9,9 +9,9 @@ The imported `PRODUCT_SPECS.MD` is the source of truth for what gets built: Grou
 
 ## Spec vs. current code
 
-The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code has working Neon Auth, a landing page, and the filter-panel search at `/dashboard`: map, filter panel and results list with a parcel card, backed by `parcels.search`. It runs against the fake parcels; there's no real parcel data yet.
+The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code has working Neon Auth, a landing page, and the search at `/dashboard`: a question box and filter chips over the map, the filter panel, and the results list with a parcel card, backed by `parcels.search` and `assistant.ask`. The dev branch holds the real Huntington Beach parcels from `../pipeline/`.
 
-Search gaps against the spec: no natural-language chat or filter chips, no "near a place" or map-area filters, no CSV export, and the lot-size filter is min/max inputs rather than a slider. The single-family and multifamily zone groups in `lib/parcel-filters.ts` are provisional until the spec's open question on HB zone codes is settled. Projects, the pipeline board and funding don't exist, and the Anthropic SDK isn't installed.
+Search gaps against the spec: "near a place" covers street names only (no addresses or landmarks), chips can be removed but not edited (values change in the panel), there's no map-area filter or CSV export, and the lot-size filter is min/max inputs rather than a slider. The zone groups in `lib/parcel-filters.ts` mirror each zone's `housing_type` in `zone_rules`. Projects, the pipeline board and funding don't exist, so the assistant has no `save_to_project` or `update_project` tools.
 
 Prisma has no geometry type, so geometry columns need `Unsupported("geometry(...)")` and spatial queries go through `db.$queryRaw`. The spec's offline data jobs live in `../pipeline/`, a separate Python project that only writes rows into tables this schema defines.
 
@@ -19,11 +19,13 @@ Prisma has no geometry type, so geometry columns need `Unsupported("geometry(...
 
 - **Filters:** `lib/parcel-filters.ts` defines the filter set once: the zod input schema for `parcels.search` and the URL encoding. The URL is the only filter state; `lib/hooks/use-parcel-filters.ts` writes it with `history.replaceState`, which updates `useSearchParams` without a server round trip. The LLM's `search_parcels` tool should take the same schema.
 - **Query:** `app/api/trpc/parcels.ts` builds the `WHERE` clause with `Prisma.sql` fragments, and returns `SEARCH_PAGE_SIZE` parcels per page. It runs two queries in parallel: one for the lot and home totals over every match, and one that picks the page's APNs from narrow columns before building geometry, so a deep `OFFSET` doesn't serialize every skipped polygon. The page offset is a `cursor` input outside `parcelFiltersSchema`, so it never reaches the URL or the LLM tool; the dashboard loads more pages with `useInfiniteQuery`, and the map draws every loaded page.
+- **Near a street:** `nearStreet` and `nearMi` match lots whose address street normalizes (`lib/streets.ts`, mirrored in SQL by `streetMatchSql`) to the typed name, then keep every lot that intersects that street's lots buffered once in EPSG:2230. Buffering once uses the `geom` index; `ST_DWithin` on geography against the union took seconds.
+- **Assistant:** `assistant.ask` (`app/api/trpc/assistant.ts`) runs a Claude tool loop with `search_parcels`, which takes `parcelFiltersSchema` and reuses `searchSummary`, and `get_parcel`. Claude only picks filters; the client writes the returned filters to the URL like any panel change. The newest message restates the page's filters, because users remove chips between messages. `ANTHROPIC_API_KEY` goes in `.env`. `pnpm try:assistant` runs the spec's example questions against the real API and dev data (it costs a few cents); run it after changing `assistant-prompt.ts`.
 - **Map:** MapLibre GL with OpenFreeMap's keyless Positron style. Lots are drawn as polygons from zoom 14 and as points below 15, because they're too small to see at city zoom.
 
 New pages that need a signed-in user need `requirePageUser()` and an entry in the `proxy.ts` matcher, which currently covers only `/dashboard`. Use `assertOwner` for owned rows such as projects; it expects a `userId` field, so map it from a snake_case column.
 
-`docs/superpowers/` dates from an earlier project. Its auth design is still accurate, but it contains no Groundwork requirements.
+Most of `docs/superpowers/` dates from an earlier project, though its auth design is still accurate. The Groundwork documents there are the natural-language search design and plan, both dated 2026-11-07.
 
 ## Project structure
 
