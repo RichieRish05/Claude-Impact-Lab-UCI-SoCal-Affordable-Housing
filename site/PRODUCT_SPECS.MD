@@ -6,17 +6,16 @@ Down payment assistance stacking matcher. One-day hackathon build (UCI Impact La
 
 **LLM extracts, code decides, LLM explains.**
 
-- An LLM parses messy program PDFs/websites into structured JSON rules — at **build time**, then a second LLM pass checks them against the source.
+- An LLM parses messy program PDFs/websites into structured JSON rules — in a **background ingest pipeline, never during a user request** — then a second LLM pass checks them against the source.
 - Eligibility matching and plan ordering are **pure deterministic TypeScript**. No LLM call ever decides whether someone qualifies. Never violate this.
 - An LLM turns match results into plain-language explanations at runtime.
 
 ## Architecture
 
 ```
-BUILD TIME (run once, Sat morning)
-  program sites & PDFs → scripts/ingest.ts (Claude API, structured output)
-                       → second Claude pass: checks each field against the source, quoting the passage
-                       → Neon `program_rules` table (verified = true only if nothing is flagged)
+INGEST (Inngest on Vercel, started manually)
+  `ingest.requested` event → one run per program → the 7 steps below
+                           → Neon `program_rules` table (verified = true only if nothing is flagged)
 
 RUNTIME
   sign in → onboarding form ─┐
@@ -33,7 +32,30 @@ Account first, then gated: a family creates an account, then completes onboardin
 
 Phone intake links to the account with a code: the onboarding page shows a short, single-use, expiring code, and the caller reads it out. The Vapi webhook has no session, so `/api/voice-webhook` uses the code to find the user. Once the profile is saved, the gate opens.
 
-No message queue, no background workers. ~15 programs, not 15,000. The only async in the system is the Vapi webhook POST.
+No message queue, no background workers on the user path. ~15 programs, not 15,000. The only async outside ingest is the Vapi webhook POST.
+
+## Ingest pipeline
+
+An Inngest function deployed on Vercel. Each step retries on its own, and completed steps aren't re-run. The Claude steps use `step.fetch`, so Inngest makes the HTTP request and the Vercel function doesn't wait on it. The code steps use `step.run` and run on Vercel, so they must fit within the Vercel function time limit.
+
+| Step | Type | What it does |
+|---|---|---|
+| 1. Fetch source | Code | Download the site or PDF, convert it to text, store the text and its hash in `program_sources` |
+| 2. Check for changes | Code | Stop if the hash is unchanged and the rule is already verified |
+| 3. Extract | Claude (`step.fetch`) | Turn the source text into a `ProgramRule`, using structured output |
+| 4. Validate | Code | Check the rule's shape and types, and require `source_url` |
+| 5. Verify | Claude (`step.fetch`) | In a separate call that sees only the source text and the rule, check each field and quote the source passage |
+| 6. Check quotes | Code | Confirm each quote appears in the stored text, ignoring whitespace differences; record any flags |
+| 7. Save | Code | Write to `program_rules`, with `verified` true only if nothing is flagged |
+
+- **Plain functions:** the step logic lives in `lib/ingest/`, and the Inngest function only calls it. This keeps the logic testable without Inngest.
+- **Same text for both passes:** Claude gets the stored text, not the raw PDF, so quotes can be compared exactly.
+- **Pass IDs between steps:** steps read source text from Neon by ID rather than passing documents through step results. The exception is the Claude request body, which has to contain the text and therefore passes through Inngest.
+- **Re-runs:** a verified rule stays live until its replacement passes. If the replacement is flagged, keep the live rule and record the flags on its row, so they can be seen and acted on.
+- **Concurrency:** limit concurrent runs to stay within Claude rate limits.
+- **Starting a run:** send `ingest.requested` from the Inngest dashboard. There is no public trigger route, because anyone who could call one could spend API credits.
+- **Sources:** the program URLs live in `lib/ingest/sources.json`. Pages that won't fetch, such as ones rendered with JavaScript, may need their text added to `program_sources` by hand.
+- **Database:** the Vercel deployment's `DATABASE_URL` determines which Neon branch receives the rules. It must be the branch the demo reads from.
 
 ## Dashboard
 
@@ -54,18 +76,19 @@ Intake (web and voice) asks for a best-estimate credit band if the family doesn'
 - **Neon Postgres** — program rules, profiles, and tracker state; queried from server code only, never from the client
 - **Neon Auth** — email/password and Google, required for intake; server-side checks go through `lib/auth/guards.ts`
 - **Program rules** — one row per program in `program_rules`: `id`, `verified`, `verification_flags`, and a `rule` JSONB column holding the `ProgramRule`. The `id` and `verified` columns are authoritative: the rule loader overwrites those fields in the object with the column values
-- **Claude API** — `scripts/ingest.ts` extraction + runtime explanation endpoint
+- **Inngest** — durable ingest pipeline only, served from `/api/inngest`; authenticated by Inngest's signing key, not a user session, and never on the user path
+- **Claude API** — ingest extraction and verification + runtime explanation endpoint
 - **Vapi (or Retell)** — hosted voice agent; its tool-call POSTs the finished profile and link code to `/api/voice-webhook`
 
 ## Layout
 
 ```
-app/                 pages (onboarding, dashboard tabs) + api routes (app/api/profile, app/api/explain, app/api/voice-webhook)
+app/                 pages (onboarding, dashboard tabs) + api routes (app/api/profile, app/api/explain, app/api/voice-webhook, app/api/inngest)
 lib/match.ts         eligibility engine — pure functions over ProgramRule[]
 lib/plan.ts          dependency resolution — topological sort over prerequisites/requires
 lib/types.ts         the two contracts below; import from here only
 lib/auth/            Neon Auth setup, session, and guards (already built)
-scripts/ingest.ts    Claude extraction pipeline (run manually, never at runtime)
+lib/ingest/          ingest step logic and sources.json; plain functions called by the Inngest function
 ```
 
 ## The two contracts
@@ -133,11 +156,11 @@ Plan output: ordered steps from topo-sorting the union of `prerequisites` + `sta
 ## Rules for agents working in this repo
 
 1. **Never put an LLM call inside `lib/match.ts` or `lib/plan.ts`.** Deterministic only — this is the anti-hallucination story for judges. They also never query the database: API routes load the rules and pass them in as `ProgramRule[]`.
-2. Rules with `verified: false` are invisible to the matcher. The second pass runs separately from extraction and sees only the source and the extracted rule. It must quote the source passage for each field, and `scripts/ingest.ts` checks in code that each quote appears in the source; a missing quote or a disagreement flags the rule. Flagged rules stay out until a re-run passes. The demo answer to "what about hallucination?" is this check plus `source_url`.
+2. Rules with `verified: false` are invisible to the matcher. A missing quote or a disagreement in the second pass flags the rule, and a flagged new rule stays out until a re-run passes. The demo answer to "what about hallucination?" is this check plus `source_url`.
 3. **Never collect or store SSN, DOB, or bank/account numbers** — web form or voice. Income band, household size, city is all we need.
 4. All user-facing strings, including voice intake, are English only for now. No i18n framework.
 5. Money is integer USD (annual income, caps, estimates). No cents, no floats in comparisons.
-6. Boring tech wins: no queues, no microservices, no new frameworks mid-day. If a feature endangers the demo path, cut the feature.
+6. Boring tech wins: no queues, no microservices, no new frameworks mid-day. Inngest is the one exception, limited to ingest; nothing on the demo path may depend on it. If a feature endangers the demo path, cut the feature.
 7. Demo path is sacred: sign-in → onboarding form → matches → stack total → plan must work at all times on `main`. Voice and tracker are additive layers.
 8. The voice webhook (`/api/voice-webhook`) must validate the payload shape and fail soft — a garbled call should never 500 the app.
 
@@ -161,7 +184,7 @@ pnpm build
 pnpm lint
 pnpm test              # Vitest
 pnpm exec next typegen && pnpm exec tsc --noEmit   # typecheck; run before every commit
-pnpm ingest            # planned: add with scripts/ingest.ts — extract rules from URLs in scripts/sources.json
+pnpm dlx inngest-cli@latest dev   # planned: local Inngest dev server, for developing the pipeline
 ```
 
-Env vars (`.env.local`, never committed): `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `VAPI_API_KEY`, `VAPI_WEBHOOK_SECRET`.
+Env vars (`.env.local` and Vercel, never committed): `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `VAPI_API_KEY`, `VAPI_WEBHOOK_SECRET`.

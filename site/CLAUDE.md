@@ -9,9 +9,9 @@ The imported `PRODUCT_SPECS.MD` is the source of truth for what gets built: Stac
 
 ## Spec vs. current code
 
-The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code is a Next.js scaffold with working Neon Auth, carried over from an earlier project. None of the StackUp product exists yet: no `lib/match.ts`, `lib/plan.ts`, `lib/types.ts`, `program_rules` table, `scripts/`, or `/api/profile`, and `app/page.tsx` is still the `create-next-app` starter.
+The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code is a Next.js scaffold with working Neon Auth, carried over from an earlier project. None of the StackUp product exists yet: no `lib/match.ts`, `lib/plan.ts`, `lib/types.ts`, `lib/ingest/`, `program_rules` table, or `/api/profile`, and `app/page.tsx` is still the `create-next-app` starter.
 
-Dependencies the spec calls for are also missing: no Postgres client or Anthropic SDK is installed, and `pnpm ingest` doesn't exist yet.
+Dependencies the spec calls for are also missing: no Postgres client, Anthropic SDK, or Inngest SDK is installed. Check the current Inngest docs before building the pipeline; the spec's design wasn't validated against them.
 
 Intake requires login, so new pages such as onboarding need `requirePageUser()` and an entry in the `proxy.ts` matcher, which currently covers only `/dashboard`. Signed-in users without a profile may use only onboarding, on both pages and APIs. Programs, Tracker, and Checklist also stay locked until the profile is complete, and the matcher must never run on an incomplete one. These gates are still to build: `lib/auth/guards.ts` checks only for a session, and `providers.tsx` sends every sign-in to `/dashboard`. Enforce it in the guards, because `proxy.ts` is only an optimistic redirect. `assertOwner` expects `userId`, while the `UserProfile` contract uses `user_id`, so map the field when calling it.
 
