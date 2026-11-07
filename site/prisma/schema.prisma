@@ -14,7 +14,7 @@ datasource db {
 // and never get a zone_rules row. updated_at has a database default because
 // the pipeline writes without the Prisma client.
 model Parcel {
-  apn                String                                    @id
+  apn                String                                      @id
   address            String?
   geom               Unsupported("geometry(MultiPolygon, 4326)")
   zone               String?
@@ -28,6 +28,8 @@ model Parcel {
   dist_transit_ft    Int?
   flood_zone         String?
   neighborhood       String?
+
+  project_parcels ProjectParcel[]
 
   created_at DateTime @default(now())
   updated_at DateTime @default(now()) @updatedAt
@@ -47,4 +49,73 @@ model ZoneRule {
   updated_at DateTime @default(now()) @updatedAt
 
   @@map("zone_rules")
+}
+
+enum ProjectStage {
+  found
+  screening
+  owner_outreach
+  feasibility
+  application_submitted
+  approved
+  funded
+  under_construction
+}
+
+model Project {
+  id           String       @id @default(uuid())
+  user_id      String
+  name         String
+  stage        ProjectStage @default(found)
+  notes        String       @default("")
+  submitted_at DateTime?    @db.Date
+  approved_at  DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
+
+  parcels   ProjectParcel[]
+  checklist ChecklistItem[]
+  activity  Activity[]
+
+  @@index([user_id])
+  @@map("projects")
+}
+
+model ProjectParcel {
+  project_id String
+  apn        String
+  created_at DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  parcel  Parcel  @relation(fields: [apn], references: [apn], onDelete: Cascade)
+
+  @@id([project_id, apn])
+  @@map("project_parcels")
+}
+
+model ChecklistItem {
+  id         String    @id @default(uuid())
+  project_id String
+  key        String
+  done       Boolean   @default(false)
+  done_at    DateTime?
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@unique([project_id, key])
+  @@map("checklist_items")
+}
+
+model Activity {
+  id         String   @id @default(uuid())
+  project_id String
+  kind       String
+  data       Json     @db.JsonB
+  created_at DateTime @default(now())
+
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id, created_at])
+  @@map("activity")
 }
