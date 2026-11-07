@@ -17,7 +17,7 @@ Prisma has no geometry type, so geometry columns need `Unsupported("geometry(...
 
 ## Search
 
-- **Filters:** `lib/parcel-filters.ts` defines the filter set once: the zod input schema for `parcels.search` and the URL encoding. The URL is the only filter state; `app/dashboard/use-parcel-filters.ts` writes it with `history.replaceState`, which updates `useSearchParams` without a server round trip. The LLM's `search_parcels` tool should take the same schema.
+- **Filters:** `lib/parcel-filters.ts` defines the filter set once: the zod input schema for `parcels.search` and the URL encoding. The URL is the only filter state; `lib/hooks/use-parcel-filters.ts` writes it with `history.replaceState`, which updates `useSearchParams` without a server round trip. The LLM's `search_parcels` tool should take the same schema.
 - **Query:** `app/api/trpc/parcels.ts` builds the `WHERE` clause with `Prisma.sql` fragments, returns at most `SEARCH_RESULT_LIMIT` parcels, and computes the lot and home totals over every match with window functions.
 - **Map:** MapLibre GL with OpenFreeMap's keyless Positron style. Lots are drawn as polygons from zoom 14 and as points below 15, because they're too small to see at city zoom.
 
@@ -28,6 +28,7 @@ New pages that need a signed-in user need `requirePageUser()` and an entry in th
 ## Project structure
 
 - **`lib/`:** shared, reusable, pure utility functions, plus constants, enums, and thin wrappers such as `lib/db.ts`. Shared types belong here. Eligibility rules don't: `../pipeline/` computes and stores them, and the app only reads the stored columns.
+- **`lib/hooks/`:** every custom React hook, one per file named after the hook (`use-parcel-filters.ts`), even if only one page uses it today. Don't define hooks inside `app/` or `components/`; import them from here.
 - **`app/`:** pages and API routes.
 - **`components/`:** shared React components. `components/ui/` holds shadcn-registry components such as Magic UI's `dither-field.tsx`; add them with `pnpm dlx shadcn@latest add @magicui/<name>` rather than hand-writing them. Colors live as CSS variables in `app/globals.css`, and the app is light-only.
 - **`inngest/`:** the Inngest client, functions, and step logic, if background jobs are added.

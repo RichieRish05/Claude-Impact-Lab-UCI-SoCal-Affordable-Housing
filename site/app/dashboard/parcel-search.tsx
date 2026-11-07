@@ -9,11 +9,11 @@ import {
   SORT_LABELS,
   type ParcelSort,
 } from "@/lib/parcel-filters";
+import { useParcelFilters } from "@/lib/hooks/use-parcel-filters";
 import { useTRPC } from "@/lib/trpc/client";
 import { FilterPanel } from "./filter-panel";
 import { ParcelMap, resultsKey } from "./parcel-map";
 import { ResultsList } from "./results-list";
-import { useParcelFilters } from "./use-parcel-filters";
 
 export function ParcelSearch() {
   const trpc = useTRPC();
