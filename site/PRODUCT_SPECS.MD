@@ -19,7 +19,7 @@ INGEST (Inngest on Vercel, started manually)
 
 RUNTIME
   sign in → onboarding form ─┐
-  dashboard profile tab ─────┤ (/api/profile)
+  dashboard profile tab ─────┤ (tRPC profile router)
   voice call + code ─────────┘ (/api/voice-webhook)
      ↓ save profile, load verified rules from Neon
   lib/match.ts (deterministic)
@@ -48,13 +48,13 @@ An Inngest function deployed on Vercel. Each step retries on its own, and comple
 | 6. Check quotes | Code | Confirm each quote appears in the stored text, ignoring whitespace differences; record any flags |
 | 7. Save | Code | Write to `program_rules`, with `verified` true only if nothing is flagged |
 
-- **Plain functions:** the step logic lives in `lib/ingest/`, and the Inngest function only calls it. This keeps the logic testable without Inngest.
+- **Plain functions:** the step logic lives in plain functions in `inngest/`, and the Inngest function only calls them. This keeps the logic testable without Inngest.
 - **Same text for both passes:** Claude gets the stored text, not the raw PDF, so quotes can be compared exactly.
 - **Pass IDs between steps:** steps read source text from Neon by ID rather than passing documents through step results. The exception is the Claude request body, which has to contain the text and therefore passes through Inngest.
 - **Re-runs:** a verified rule stays live until its replacement passes. If the replacement is flagged, keep the live rule and record the flags on its row, so they can be seen and acted on.
 - **Concurrency:** limit concurrent runs to stay within Claude rate limits.
 - **Starting a run:** send `ingest.requested` from the Inngest dashboard. There is no public trigger route, because anyone who could call one could spend API credits.
-- **Sources:** the program URLs live in `lib/ingest/sources.json`. Pages that won't fetch, such as ones rendered with JavaScript, may need their text added to `program_sources` by hand.
+- **Sources:** the program URLs live in `inngest/sources.json`. Pages that won't fetch, such as ones rendered with JavaScript, may need their text added to `program_sources` by hand.
 - **Database:** the Vercel deployment's `DATABASE_URL` determines which Neon branch receives the rules. It must be the branch the demo reads from.
 
 ## Dashboard
@@ -73,22 +73,25 @@ Intake (web and voice) asks for a best-estimate credit band if the family doesn'
 ## Stack
 
 - **Next.js (App Router) + TypeScript** on Vercel — frontend and API routes in one deploy
+- **tRPC + TanStack React Query** — tRPC defines the API routes, and the frontend fetches data through TanStack React Query
 - **Neon Postgres** — program rules, profiles, and tracker state; queried from server code only, never from the client
 - **Neon Auth** — email/password and Google, required for intake; server-side checks go through `lib/auth/guards.ts`
 - **Program rules** — one row per program in `program_rules`: `id`, `verified`, `verification_flags`, and a `rule` JSONB column holding the `ProgramRule`. The `id` and `verified` columns are authoritative: the rule loader overwrites those fields in the object with the column values
-- **Inngest** — durable ingest pipeline only, served from `/api/inngest`; authenticated by Inngest's signing key, not a user session, and never on the user path
-- **Claude API** — ingest extraction and verification + runtime explanation endpoint
+- **Inngest** — durable ingest pipeline only, with its client and functions in `inngest/`, served from `/api/inngest`; authenticated by Inngest's signing key, not a user session, and never on the user path
+- **Claude API** — ingest extraction and verification + runtime explanation procedure
 - **Vapi (or Retell)** — hosted voice agent; its tool-call POSTs the finished profile and link code to `/api/voice-webhook`
 
 ## Layout
 
 ```
-app/                 pages (onboarding, dashboard tabs) + api routes (app/api/profile, app/api/explain, app/api/voice-webhook, app/api/inngest)
+app/                 pages (onboarding, dashboard tabs) + api routes (app/api/trpc for the tRPC handler and routers; plain handlers at app/api/auth, app/api/voice-webhook, app/api/inngest)
+inngest/             Inngest client and functions, plus ingest step logic (plain functions) and sources.json
+docs/                feature plans
 lib/match.ts         eligibility engine — pure functions over ProgramRule[]
 lib/plan.ts          dependency resolution — topological sort over prerequisites/requires
 lib/types.ts         the two contracts below; import from here only
 lib/auth/            Neon Auth setup, session, and guards (already built)
-lib/ingest/          ingest step logic and sources.json; plain functions called by the Inngest function
+lib/trpc/            tRPC + TanStack React Query client setup
 ```
 
 ## The two contracts
@@ -133,7 +136,7 @@ interface ProgramRule {
   verified: boolean;               // set by the second LLM pass; matcher must ignore rules where false
 }
 
-// UserProfile — Neon Postgres `profiles` table + /api/profile body
+// UserProfile — Neon Postgres `profiles` table + tRPC profile router input
 interface UserProfile {
   id: string;
   user_id: string;                 // Neon Auth user id; one profile per user
