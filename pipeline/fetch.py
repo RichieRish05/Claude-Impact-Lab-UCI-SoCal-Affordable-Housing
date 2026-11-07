@@ -26,6 +26,13 @@ SOURCES = {
         "url": "https://gis.huntingtonbeachca.gov/arcgis/rest/services/Planning/MapServer/1/query",
         "filter": {},
     },
+    # Assessor land use and building data for HB parcels, used by eligibility.py for vacancy.
+    "hb_parcel_attrs.geojson": {
+        "url": "https://gis.huntingtonbeachca.gov/arcgis/rest/services/Parcels/MapServer/0/query",
+        "filter": {},
+        "fields": "DATA.W2_HB.APN,DATA.W2_HB.USECODESTDDESCLPS,DATA.W2_HB.BUILDINGSQFT,DATA.W2_HB.YRBLT,DATA.W2_HB.VALMRKTIMPRV",
+        "geometry": False,
+    },
 }
 
 # Offset paging skips and repeats rows on these servers, so fetch by explicit object IDs.
@@ -53,7 +60,13 @@ def fetch(name, src):
     features = []
     for i in range(0, len(ids), CHUNK):
         chunk = ids[i : i + CHUNK]
-        params = {"objectIds": ",".join(map(str, chunk)), "outFields": "*", "outSR": "4326", "f": "geojson"}
+        params = {
+            "objectIds": ",".join(map(str, chunk)),
+            "outFields": src.get("fields", "*"),
+            "returnGeometry": str(src.get("geometry", True)).lower(),
+            "outSR": "4326",
+            "f": "geojson",
+        }
         page = get_json(src["url"], params)["features"]
         if len(page) != len(chunk):
             raise RuntimeError(f"{name}: asked for {len(chunk)} ids, got {len(page)}")
