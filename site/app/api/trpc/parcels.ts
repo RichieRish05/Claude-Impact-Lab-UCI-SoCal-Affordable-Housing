@@ -27,6 +27,15 @@ export type ParcelResult = {
   lat: number;
 };
 
+export const PARCEL_RESULT_COLUMNS = Prisma.sql`
+  apn, address, zone, lot_sqft, vacant, vacant_confidence,
+  sb684_eligible, max_homes, eligibility_reason, assessed_value,
+  dist_transit_ft, flood_zone, neighborhood,
+  ST_AsGeoJSON(geom)::json AS geometry,
+  ST_X(ST_PointOnSurface(geom)) AS lng,
+  ST_Y(ST_PointOnSurface(geom)) AS lat
+`;
+
 export function buildParcelWhere(filters: ParcelFilters): Prisma.Sql {
   const conditions: Prisma.Sql[] = [];
 
@@ -100,12 +109,7 @@ export const parcelsRouter = router({
             ORDER BY ${orderBy}
             LIMIT ${SEARCH_PAGE_SIZE} OFFSET ${cursor}
           )
-          SELECT apn, address, zone, lot_sqft, vacant, vacant_confidence,
-                 sb684_eligible, max_homes, eligibility_reason, assessed_value,
-                 dist_transit_ft, flood_zone, neighborhood,
-                 ST_AsGeoJSON(geom)::json AS geometry,
-                 ST_X(ST_PointOnSurface(geom)) AS lng,
-                 ST_Y(ST_PointOnSurface(geom)) AS lat
+          SELECT ${PARCEL_RESULT_COLUMNS}
           FROM parcels JOIN page USING (apn)
           ORDER BY ${orderBy}
         `,

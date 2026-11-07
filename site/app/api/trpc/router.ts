@@ -1,5 +1,6 @@
 import { protectedProcedure, router } from "./init";
 import { parcelsRouter } from "./parcels";
+import { projectsRouter } from "./projects";
 
 export const appRouter = router({
   me: protectedProcedure.query(({ ctx }) => ({
@@ -7,6 +8,7 @@ export const appRouter = router({
     email: ctx.user.email,
   })),
   parcels: parcelsRouter,
+  projects: projectsRouter,
 });
 
 export type AppRouter = typeof appRouter;
