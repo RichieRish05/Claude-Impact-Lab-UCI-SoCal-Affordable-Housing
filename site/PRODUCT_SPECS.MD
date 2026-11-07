@@ -8,7 +8,7 @@ Down payment assistance stacking matcher. One-day hackathon build (UCI Impact La
 
 - An LLM parses messy program PDFs/websites into structured JSON rules — at **build time**, human-reviewed.
 - Eligibility matching and plan ordering are **pure deterministic TypeScript**. No LLM call ever decides whether someone qualifies. Never violate this.
-- An LLM turns match results into plain-language explanations (English + Spanish) at runtime.
+- An LLM turns match results into plain-language explanations at runtime.
 
 ## Architecture
 
@@ -102,7 +102,6 @@ interface UserProfile {
   id: string;
   user_id: string;                 // Neon Auth user id; one profile per user
   created_via: "web" | "voice";
-  language: "en" | "es";
   household_size: number;
   annual_income_usd: number;
   savings_usd: number;
@@ -123,7 +122,7 @@ Plan output: ordered steps from topo-sorting the union of `prerequisites` + `sta
 1. **Never put an LLM call inside `lib/match.ts` or `lib/plan.ts`.** Deterministic only — this is the anti-hallucination story for judges.
 2. Rules with `human_reviewed: false` are invisible to the matcher. The demo answer to "what about hallucination?" is this flag plus `source_url`.
 3. **Never collect or store SSN, DOB, or bank/account numbers** — web form or voice. Income band, household size, city is all we need.
-4. All user-facing strings bilingual EN/ES from the start (simple dictionary object is fine; no i18n framework).
+4. All user-facing strings, including voice intake, are English only for now. No i18n framework.
 5. Money is integer USD (annual income, caps, estimates). No cents, no floats in comparisons.
 6. Boring tech wins: no queues, no microservices, no new frameworks mid-day. If a feature endangers the demo path, cut the feature.
 7. Demo path is sacred: sign-in → onboarding form → matches → stack total → plan must work at all times on `main`. Voice and tracker are additive layers.
@@ -131,7 +130,7 @@ Plan output: ordered steps from topo-sorting the union of `prerequisites` + `sta
 
 ## Demo persona (seed this)
 
-Maria — hotel worker, Santa Ana, household of 4, $58,000/yr, $8,000 saved, first-time buyer, Spanish-preferred. Target: condo ~$550k. The demo beat: her out-of-pocket drops from six figures to ~$15k via 3–4 stacked programs, shown live. She creates an account on the web, reads the on-screen code into a phone call, and does intake in Spanish; the dashboard then opens with her results.
+Maria — hotel worker, Santa Ana, household of 4, $58,000/yr, $8,000 saved, first-time buyer. Target: condo ~$550k. The demo beat: her out-of-pocket drops from six figures to ~$15k via 3–4 stacked programs, shown live. She creates an account on the web, reads the on-screen code into a phone call, and does intake by voice; the dashboard then opens with her results.
 
 ## Scope ladder (cut from the bottom)
 
