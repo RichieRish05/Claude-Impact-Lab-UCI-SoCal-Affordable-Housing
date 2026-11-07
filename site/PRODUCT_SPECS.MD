@@ -6,7 +6,7 @@ Down payment assistance stacking matcher. One-day hackathon build (UCI Impact La
 
 **LLM extracts, code decides, LLM explains.**
 
-- An LLM parses messy program PDFs/websites into structured JSON rules — at **build time**, human-reviewed.
+- An LLM parses messy program PDFs/websites into structured JSON rules — at **build time**, then a second LLM pass checks them against the source.
 - Eligibility matching and plan ordering are **pure deterministic TypeScript**. No LLM call ever decides whether someone qualifies. Never violate this.
 - An LLM turns match results into plain-language explanations at runtime.
 
@@ -15,18 +15,18 @@ Down payment assistance stacking matcher. One-day hackathon build (UCI Impact La
 ```
 BUILD TIME (run once, Sat morning)
   program sites & PDFs → scripts/ingest.ts (Claude API, structured output)
-                       → Neon `program_rules` table (human_reviewed = false)
-                       → person checks each row against source_url, sets human_reviewed = true
+                       → second Claude pass: checks each field against the source, quoting the passage
+                       → Neon `program_rules` table (verified = true only if nothing is flagged)
 
 RUNTIME
   sign in → onboarding form ─┐
   dashboard profile tab ─────┤ (/api/profile)
   voice call + code ─────────┘ (/api/voice-webhook)
-     ↓ save profile, load reviewed rules from Neon
+     ↓ save profile, load verified rules from Neon
   lib/match.ts (deterministic)
      → lib/plan.ts (topo sort)
      → Claude: plain-language explain
-     → results + plan + tracker UI
+     → dashboard tabs
 ```
 
 Account first, then gated: a family creates an account, then completes onboarding. Until a profile exists, onboarding is the only page or API they can use, and signing in sends them back to it. After that, the same questions are edited in the dashboard's profile tab.
@@ -35,19 +35,32 @@ Phone intake links to the account with a code: the onboarding page shows a short
 
 No message queue, no background workers. ~15 programs, not 15,000. The only async in the system is the Vapi webhook POST.
 
+## Dashboard
+
+Four tabs, all behind the profile gate:
+
+- **Programs** — the programs they're eligible for, with plain-language explanations, plus the stack total and ordered plan. Reflects the current profile.
+- **Application tracker** — status of each program's application.
+- **Checklist** — shared document checklist.
+- **Profile** — edit onboarding answers and fill in missing info.
+
+Programs stays locked until every onboarding question is answered, and points to the Profile tab until then. This is enforced on the server: the matcher never runs on an incomplete profile, so it never has to handle unknown values. Tracker and Checklist lock too, since they depend on the matched programs. Answers can be incomplete if, for example, a phone call drops partway through.
+
+Intake (web and voice) asks for a best-estimate credit band if the family doesn't know their score, and explains how to check it for free. Programs states that results depend on the band they gave.
+
 ## Stack
 
 - **Next.js (App Router) + TypeScript** on Vercel — frontend and API routes in one deploy
 - **Neon Postgres** — program rules, profiles, and tracker state; queried from server code only, never from the client
 - **Neon Auth** — email/password and Google, required for intake; server-side checks go through `lib/auth/guards.ts`
-- **Program rules** — one row per program in `program_rules`: `id`, `human_reviewed`, and a `rule` JSONB column holding the `ProgramRule`. The `id` and `human_reviewed` columns are authoritative: the rule loader overwrites those fields in the object with the column values
+- **Program rules** — one row per program in `program_rules`: `id`, `verified`, `verification_flags`, and a `rule` JSONB column holding the `ProgramRule`. The `id` and `verified` columns are authoritative: the rule loader overwrites those fields in the object with the column values
 - **Claude API** — `scripts/ingest.ts` extraction + runtime explanation endpoint
 - **Vapi (or Retell)** — hosted voice agent; its tool-call POSTs the finished profile and link code to `/api/voice-webhook`
 
 ## Layout
 
 ```
-app/                 pages (onboarding, dashboard with profile tab) + api routes (app/api/profile, app/api/explain, app/api/voice-webhook)
+app/                 pages (onboarding, dashboard tabs) + api routes (app/api/profile, app/api/explain, app/api/voice-webhook)
 lib/match.ts         eligibility engine — pure functions over ProgramRule[]
 lib/plan.ts          dependency resolution — topological sort over prerequisites/requires
 lib/types.ts         the two contracts below; import from here only
@@ -94,7 +107,7 @@ interface ProgramRule {
   funding_status: "open" | "waitlist" | "exhausted" | "unknown";
   source_url: string;              // REQUIRED — every rule must be traceable
   last_verified: string;           // ISO date
-  human_reviewed: boolean;         // matcher must ignore rules where false
+  verified: boolean;               // set by the second LLM pass; matcher must ignore rules where false
 }
 
 // UserProfile — Neon Postgres `profiles` table + /api/profile body
@@ -109,8 +122,8 @@ interface UserProfile {
   county: string;                  // "Orange"
   first_time_buyer: boolean;
   veteran: boolean;
-  credit_band: "lt620" | "620-679" | "680-739" | "740plus" | "unknown";
-  target_price_usd?: number;
+  credit_band: "lt620" | "620-679" | "680-739" | "740plus" | "unknown";  // "unknown" counts as unanswered
+  target_price_usd?: number;       // optional only while incomplete; required to unlock Programs
 }
 ```
 
@@ -120,7 +133,7 @@ Plan output: ordered steps from topo-sorting the union of `prerequisites` + `sta
 ## Rules for agents working in this repo
 
 1. **Never put an LLM call inside `lib/match.ts` or `lib/plan.ts`.** Deterministic only — this is the anti-hallucination story for judges. They also never query the database: API routes load the rules and pass them in as `ProgramRule[]`.
-2. Rules with `human_reviewed: false` are invisible to the matcher. The demo answer to "what about hallucination?" is this flag plus `source_url`.
+2. Rules with `verified: false` are invisible to the matcher. The second pass runs separately from extraction and sees only the source and the extracted rule. It must quote the source passage for each field, and `scripts/ingest.ts` checks in code that each quote appears in the source; a missing quote or a disagreement flags the rule. Flagged rules stay out until a re-run passes. The demo answer to "what about hallucination?" is this check plus `source_url`.
 3. **Never collect or store SSN, DOB, or bank/account numbers** — web form or voice. Income band, household size, city is all we need.
 4. All user-facing strings, including voice intake, are English only for now. No i18n framework.
 5. Money is integer USD (annual income, caps, estimates). No cents, no floats in comparisons.
@@ -135,9 +148,9 @@ Maria — hotel worker, Santa Ana, household of 4, $58,000/yr, $8,000 saved, fir
 ## Scope ladder (cut from the bottom)
 
 1. Matcher + stack math + plan (core — never cut)
-2. Sign-in, onboarding form, results screen, dashboard profile tab
+2. Sign-in, onboarding form, dashboard Programs and Profile tabs
 3. Voice intake via Vapi
-4. Application tracker (per-program status, shared doc checklist)
+4. Dashboard Application tracker and Checklist tabs (per-program status, shared doc checklist)
 5. Counselor dashboard / PDF auto-fill (stretch)
 
 ## Commands
