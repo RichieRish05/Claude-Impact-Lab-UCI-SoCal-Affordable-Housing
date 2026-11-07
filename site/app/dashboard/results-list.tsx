@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ParcelResult } from "@/app/api/trpc/parcels";
 import {
   formatDollars,
@@ -90,6 +90,44 @@ function EligibilityBadge({ eligible }: { eligible: boolean | null }) {
   );
 }
 
+function CopyableLine({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string | null;
+  mono?: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    if (!value) return;
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <p className={cn("min-w-0 break-words select-text", mono && "font-mono text-xs")}>
+        <span className="sr-only">{label}: </span>
+        {value ?? `No ${label.toLowerCase()}`}
+      </p>
+      {value && (
+        <button
+          type="button"
+          onClick={copy}
+          aria-label={`Copy ${label.toLowerCase()}`}
+          className="shrink-0 cursor-pointer rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent"
+        >
+          <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 function ParcelCard({ parcel }: { parcel: ParcelResult }) {
   const facts: [string, string][] = [
     ["Neighborhood", parcel.neighborhood ?? "—"],
@@ -106,6 +144,10 @@ function ParcelCard({ parcel }: { parcel: ParcelResult }) {
 
   return (
     <div className="px-5 pb-4 text-sm">
+      <div className="mb-3 space-y-1.5 rounded-md border border-border bg-background p-3">
+        <CopyableLine label="Address" value={parcel.address} />
+        <CopyableLine label="APN" value={parcel.apn} mono />
+      </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
         {facts.map(([label, value]) => (
           <div key={label} className="contents">
