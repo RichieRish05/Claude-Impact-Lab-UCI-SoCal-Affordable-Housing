@@ -9,7 +9,7 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: { path: "prisma/migrations" },
   datasource: {
-    // Migrations can fail through PgBouncer, so the CLI uses Neon's direct host,
+    // Schema changes can fail through PgBouncer, so the CLI uses Neon's direct host,
     // which is the pooled host without "-pooler". Not using prisma/config's env()
     // helper, which throws when the var is unset and would break `prisma generate`
     // during install.

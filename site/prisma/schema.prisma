@@ -8,3 +8,38 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// Onboarding answers are nullable so a dropped voice call keeps its partial
+// answers. See ProfileDraft in lib/types.ts.
+model Profile {
+  id          String @id @default(uuid())
+  user_id     String @unique
+  created_via String
+
+  household_size    Int?
+  annual_income_usd Int?
+  savings_usd       Int?
+  city              String?
+  county            String?
+  first_time_buyer  Boolean?
+  veteran           Boolean?
+  credit_band       String?
+  target_price_usd  Int?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("profiles")
+}
+
+model ProgramRule {
+  id                 String  @id
+  verified           Boolean @default(false)
+  verification_flags Json    @default("[]") @db.JsonB
+  rule               Json    @db.JsonB
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("program_rules")
+}

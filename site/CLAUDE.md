@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 The imported `PRODUCT_SPECS.MD` is the source of truth for what gets built: StackUp, its data contracts, and its rules for agents. The rest of this file covers what the spec can't tell you: how the repo differs from the spec today, and how to work in the existing code.
 ## Spec vs. current code
 
-The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code is a Next.js scaffold with working Neon Auth, carried over from an earlier project. None of the StackUp product exists yet: no `lib/match.ts`, `lib/plan.ts`, `lib/types.ts`, `inngest/`, `program_rules` table, or profile API.
+The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code is a Next.js scaffold with working Neon Auth, carried over from an earlier project. None of the StackUp product exists yet: no `lib/match.ts`, `lib/plan.ts`, `inngest/`, seeded program rules, or profile API.
 
 Required dependencies are also missing: tRPC, TanStack React Query, the Anthropic SDK, and the Inngest SDK aren't installed. Check the current Inngest docs before building the pipeline; the spec's design wasn't validated against them.
 
@@ -70,10 +70,17 @@ The `@/*` import alias maps to this directory.
 
 ## Database
 
-Prisma is the ORM, and all database queries must go through it. Import `db` from `lib/db.ts`, and never query with `pg` or another client directly. `lib/db.ts` exports the only client, which connects over node-postgres using the pooled `DATABASE_URL`. The Prisma CLI uses Neon's direct host instead, because migrations can fail through PgBouncer: `prisma.config.ts` derives it by removing `-pooler` from `DATABASE_URL`. The schema has no models yet.
+Prisma is the ORM, and all database queries must go through it. Import `db` from `lib/db.ts`, and never query with `pg` or another client directly. `lib/db.ts` exports the only client, which connects over node-postgres using the pooled `DATABASE_URL`. The Prisma CLI uses Neon's direct host instead, because schema changes can fail through PgBouncer: `prisma.config.ts` derives it by removing `-pooler` from `DATABASE_URL`.
+
+The Neon project is `UGCEditor` (`raspy-rice-16858150`), and local development uses its `dev` branch. `.neon` only sets the Neon CLI's target, while `DATABASE_URL` decides what the app and Prisma connect to. Run `neon link --project-id raspy-rice-16858150 --branch dev --no-env-pull` once per checkout.
+
+- **Profiles:** onboarding answers are nullable in `profiles`, so a dropped call keeps its partial answers. These rows are `ProfileDraft` in `lib/types.ts`. Only a profile with every answer filled in and `credit_band` not `"unknown"` counts as a complete `UserProfile`.
 
 - **Generated client:** it lives in `lib/generated/prisma`, is gitignored, and is rebuilt by `postinstall`. Run `pnpm exec prisma generate` after editing `prisma/schema.prisma`.
-- **Migrations:** `pnpm exec prisma migrate dev --name <name>`. Prisma manages only the `public` schema; `neon_auth` belongs to Neon Auth.
+- **Schema changes:** Prisma manages only the `public` schema; `neon_auth` belongs to Neon Auth. Edit `prisma/schema.prisma`, check which database `DATABASE_URL` points at, then pick the command by whether the change affects existing data:
+  - **Additive changes use `pnpm exec prisma db push`:** new tables, and new columns that are nullable or have a default. Never pass `--accept-data-loss`; a data-loss warning means the change belongs in a migration.
+  - **Everything else uses `pnpm exec prisma migrate dev --name <name>`:** renames, drops, type changes, making a column required, and anything else that touches existing rows or columns. Check the generated SQL, because a rename generates a drop and an add unless you edit it to `RENAME COLUMN`.
+  - **Record pushed changes before migrating:** `db push` leaves no migration history, so `migrate dev` treats pushed changes as drift and offers to reset the database. Never accept the reset. Write what's missing to `prisma/migrations/<timestamp>_baseline/migration.sql` with `pnpm exec prisma migrate diff --from-migrations prisma/migrations --to-config-datasource --script` (use `--from-empty` for the first migration), mark it with `pnpm exec prisma migrate resolve --applied <timestamp>_baseline`, then run `migrate dev`.
 - **Versions:** the Prisma packages are pinned to the same exact version, because `prisma`'s npm `latest` tag points at an 8.0 release candidate. Don't install `prisma@latest`.
 - **Node:** Prisma supports Node 20.19+, 22.12+, and 24+, not Node 23. Its install-time version check is disabled in `pnpm-workspace.yaml` so it can't fail `pnpm install`.
 - **Tests:** mock `@/lib/db`. It throws on import if `DATABASE_URL` is missing.

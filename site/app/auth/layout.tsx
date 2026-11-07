@@ -9,7 +9,7 @@ export default function AuthLayout({ children }: LayoutProps<"/auth">) {
           pattern="horizon"
           color="var(--dither)"
           dotSize={2}
-          intensity={0.5}
+          intensity={1}
           speed={0.6}
           className="absolute inset-0"
         />

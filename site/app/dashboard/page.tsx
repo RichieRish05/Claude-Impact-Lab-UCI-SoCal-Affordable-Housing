@@ -21,7 +21,7 @@ export default async function DashboardPage() {
           Signed in as {user.email}
         </p>
         <DitherField
-          pattern="waves"
+          pattern="horizon"
           color="var(--dither)"
           dotSize={2}
           intensity={0.5}
