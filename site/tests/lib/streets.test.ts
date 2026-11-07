@@ -12,6 +12,10 @@ describe("normalizeStreet", () => {
     ["Golden West Dr", { base: "golden west", suffix: "dr" }],
     ["Oak Lane", { base: "oak", suffix: "ln" }],
     ["N", { base: "n", suffix: null }],
+    ["Main St.", { base: "main", suffix: "st" }],
+    ["Beach Blvd.,", { base: "beach", suffix: "blvd" }],
+    ["PCH", { base: "pacific coast", suffix: "hwy" }],
+    ["pch", { base: "pacific coast", suffix: "hwy" }],
   ])("normalizes %s", (input, expected) => {
     expect(normalizeStreet(input)).toEqual(expected);
   });

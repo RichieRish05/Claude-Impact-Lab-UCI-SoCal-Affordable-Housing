@@ -120,6 +120,9 @@ export async function runAssistant(input: AskInput): Promise<{ filters: ParcelFi
       (block): block is Anthropic.Beta.BetaToolUseBlock => block.type === "tool_use",
     );
 
+    if (response.stop_reason === "tool_use" && toolUses.length > 0 && turn === MAX_TURNS - 1) {
+      break;
+    }
     if (response.stop_reason !== "tool_use" || toolUses.length === 0) {
       const reply = response.content
         .filter((block): block is Anthropic.Beta.BetaTextBlock => block.type === "text")
@@ -151,7 +154,9 @@ export async function runAssistant(input: AskInput): Promise<{ filters: ParcelFi
     });
   }
 
-  return { filters, reply: FALLBACK_REPLY };
+  // Out of turns: leave the map as it was rather than show a search the reply
+  // says didn't finish.
+  return { filters: input.filters, reply: FALLBACK_REPLY };
 }
 
 export const assistantRouter = router({

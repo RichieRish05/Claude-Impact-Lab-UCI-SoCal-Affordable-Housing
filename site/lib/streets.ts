@@ -20,8 +20,12 @@ const SUFFIX_BY_SPELLING = new Map(
 
 const DIRECTIONS = new Set(["n", "s", "e", "w"]);
 
+// Names locals use that don't appear in parcel addresses.
+const ALIASES: Record<string, string> = { pch: "pacific coast hwy" };
+
 export function normalizeStreet(name: string): { base: string; suffix: string | null } | null {
-  const tokens = name.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const cleaned = name.toLowerCase().replace(/[.,]/g, " ").trim();
+  const tokens = (ALIASES[cleaned] ?? cleaned).split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return null;
   if (tokens.length > 1 && DIRECTIONS.has(tokens[0])) tokens.shift();
 

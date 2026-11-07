@@ -124,11 +124,15 @@ describe("assistant.ask", () => {
     expect(result.filters).toEqual({ eligible: true, sort: "homes" });
   });
 
-  it("stops after MAX_TURNS", async () => {
+  it("stops after MAX_TURNS and leaves the filters unchanged", async () => {
     create.mockResolvedValue(toolUse("search_parcels", { eligible: true, sort: "homes" }) as never);
-    const result = await ask();
+    const result = await ask({ minHomes: 4 });
     expect(create).toHaveBeenCalledTimes(MAX_TURNS);
-    expect(result).toEqual({ filters: { eligible: true, sort: "homes" }, reply: FALLBACK_REPLY });
+    expect(result).toEqual({ filters: { minHomes: 4, sort: "homes" }, reply: FALLBACK_REPLY });
+    const searches = queryRaw.mock.calls.filter(([strings]) =>
+      (strings as unknown as string[]).join("").includes("count(*)"),
+    );
+    expect(searches).toHaveLength(MAX_TURNS - 1);
   });
 
   it("answers why from get_parcel", async () => {
