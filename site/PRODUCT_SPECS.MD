@@ -145,7 +145,9 @@ Days remaining in the 60-day ministerial review; turns amber at 15 days, red whe
 Funding
 Capital stack: total cost, each source and amount, remaining gap
 Activity
-Timestamped log of stage changes, notes and AI actions
+Timestamped log of stage changes, checklist ticks, parcel changes and AI actions
+Notes
+One free-text box per project
 Assistant
 Chat scoped to this project
 SB 684/1123 checklist (seeded). Items come from the state's qualifying criteria and typical city application materials:
@@ -222,11 +224,12 @@ parcels (apn PK, address, geom, zone, lot_sqft, vacant, vacant_confidence,
          sb684_eligible, max_homes, eligibility_reason, assessed_value,
          dist_transit_ft, flood_zone, neighborhood)
 zone_rules (zone PK, rules_json, source_section, verified_by, verified_at)
-projects (id PK, name, stage, pathway, submitted_at, total_cost, created_at)
+projects (id PK, user_id, name, stage, pathway, notes, submitted_at, approved_at,
+          total_cost, created_at)
 project_parcels (project_id FK, apn FK)
 checklist_items (id PK, project_id FK, label, done, done_at)
 funding_sources (id PK, project_id FK, program, amount, status)
-activity (id PK, project_id FK, kind, body, created_at)
+activity (id PK, project_id FK, kind, data, body, created_at)
 LLM tools
 Tool
 Arguments
@@ -269,7 +272,7 @@ Save to project
 "Save the top 3 to a project called HB Starter Homes." Open the board
 1:55
 Pipeline board
-Drag the project to Application submitted; the 60-day clock appears. Show two seeded projects further along
+Move the project to Application submitted (the demo uses the stage dropdown, not dragging); the 60-day clock appears. Show two seeded projects further along
 2:15
 Project page
 Checklist, AI status summary, draft owner letter

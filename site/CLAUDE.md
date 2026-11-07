@@ -11,7 +11,7 @@ The imported `PRODUCT_SPECS.MD` is the source of truth for what gets built: Grou
 
 The app lives in this directory (`site/`, one level below the git root), and paths in the spec are relative to it. The code has working Neon Auth, a landing page, and the search at `/dashboard`: a question box and filter chips over the map, the filter panel, and the results list with a parcel card, backed by `parcels.search` and `assistant.ask`. The dev branch holds the real Huntington Beach parcels from `../pipeline/`.
 
-Search gaps against the spec: "near a place" covers street names only (no addresses or landmarks), chips can be removed but not edited (values change in the panel), there's no map-area filter or CSV export, and the lot-size filter is min/max inputs rather than a slider. The zone groups in `lib/parcel-filters.ts` mirror each zone's `housing_type` in `zone_rules`. Projects, the pipeline board and funding don't exist, so the assistant has no `save_to_project` or `update_project` tools.
+Search gaps against the spec: "near a place" covers street names only (no addresses or landmarks), chips can be removed but not edited (values change in the panel), there's no map-area filter or CSV export, and the lot-size filter is min/max inputs rather than a slider. The zone groups in `lib/parcel-filters.ts` mirror each zone's `housing_type` in `zone_rules`. Projects exist: a board, a project page, a checklist and the review clock. Project gaps: no funding, no dragging on the board (a stage dropdown instead), no in-project assistant chat, and the assistant has no `save_to_project` or `update_project` tools.
 
 Prisma has no geometry type, so geometry columns need `Unsupported("geometry(...)")` and spatial queries go through `db.$queryRaw`. The spec's offline data jobs live in `../pipeline/`, a separate Python project that only writes rows into tables this schema defines.
 
@@ -26,6 +26,14 @@ Prisma has no geometry type, so geometry columns need `Unsupported("geometry(...
 New pages that need a signed-in user need `requirePageUser()` and an entry in the `proxy.ts` matcher, which currently covers `/dashboard` and `/projects`. Use `assertOwner` for owned rows such as projects; it expects a `userId` field, so map it from a snake_case column.
 
 Most of `docs/superpowers/` dates from an earlier project, though its auth design is still accurate. The Groundwork documents there are the natural-language search design and plan, both dated 2026-11-07.
+
+## Projects
+
+- **Rules:** `lib/projects/` holds the pure, tested rules: stages, checklist, review clock and activity.
+- **Writes:** every project write goes through `app/api/trpc/project-service.ts`. Future AI tools should call it, not the database.
+- **Ownership:** `loadOwned` and `assertOwner` turn a missing or foreign project into `NOT_FOUND`.
+- **Client types:** infer them from the router with `inferRouterOutputs`. There's no tRPC transformer, so `Date`s arrive as strings.
+- **Known issue:** re-running `../pipeline/load.py` deletes every parcel, which cascades and empties every project's lots. This is accepted for now.
 
 ## Project structure
 
