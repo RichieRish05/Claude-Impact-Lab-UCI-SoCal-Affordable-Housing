@@ -95,6 +95,22 @@ describe("assistant.ask", () => {
     expect(params.model).toBe("test-model");
   });
 
+  it("restates the current filters in the newest message, so hand-removed filters stay removed", async () => {
+    respond(text("Done."));
+    await caller.assistant.ask({
+      message: "only under $1M",
+      history: [
+        { role: "user", text: "only ones with at least 4 homes" },
+        { role: "assistant", text: "86 lots fit at least 4 homes." },
+      ],
+      filters: { eligible: true, sort: "homes" },
+    });
+    const params = create.mock.calls[0][0] as { messages: { role: string; content: string }[] };
+    const last = params.messages[params.messages.length - 1];
+    expect(last.content).toContain("only under $1M");
+    expect(last.content).toContain(JSON.stringify({ eligible: true, sort: "homes" }));
+  });
+
   it("reports a missing street", async () => {
     respond(toolUse("search_parcels", { nearStreet: "Fake Blvd", sort: "homes" }), text("No such street."));
     await ask();

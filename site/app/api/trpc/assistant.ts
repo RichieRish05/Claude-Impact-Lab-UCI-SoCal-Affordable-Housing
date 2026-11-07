@@ -107,7 +107,10 @@ export async function runAssistant(input: AskInput): Promise<{ filters: ParcelFi
     ...input.history
       .filter((turn) => turn.text.trim())
       .map((turn) => ({ role: turn.role, content: turn.text })),
-    { role: "user", content: input.message },
+    {
+      role: "user",
+      content: `${input.message}\n\n[Filters on the page right now: ${JSON.stringify(input.filters)}]`,
+    },
   ];
   let filters = input.filters;
 
